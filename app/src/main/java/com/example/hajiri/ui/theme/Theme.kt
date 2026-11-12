@@ -1,32 +1,30 @@
 package com.example.hajiri.ui.theme
 
 import android.app.Activity
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
-private val DarkColorScheme = darkColorScheme(
+private val LightColorScheme = lightColorScheme(
     primary = AccentIndigo,
-    onPrimary = TextPrimary,
+    onPrimary = TextLight,
     secondary = AccentPurple,
-    onSecondary = TextPrimary,
+    onSecondary = TextLight,
     tertiary = OtOrange,
-    background = DarkBackground,
+    background = LightBackground,
     onBackground = TextPrimary,
-    surface = SurfaceDark,
+    surface = LiquidGlassCard,
     onSurface = TextPrimary,
-    surfaceVariant = GlassCard,
+    surfaceVariant = LiquidGlassCardSubtle,
     onSurfaceVariant = TextSecondary,
-    outline = GlassBorder
+    outline = LiquidGlassBorder
 )
 
 @Composable
 fun HajiriTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit
 ) {
     val view = LocalView.current
@@ -35,14 +33,15 @@ fun HajiriTheme(
             val window = (view.context as? Activity)?.window
             if (window != null) {
                 val insetsController = WindowCompat.getInsetsController(window, view)
-                insetsController.isAppearanceLightStatusBars = false
-                insetsController.isAppearanceLightNavigationBars = false
+                // Light theme: dark status & navigation bar icons
+                insetsController.isAppearanceLightStatusBars = true
+                insetsController.isAppearanceLightNavigationBars = true
             }
         }
     }
 
     MaterialTheme(
-        colorScheme = DarkColorScheme,
+        colorScheme = LightColorScheme,
         content = content
     )
 }

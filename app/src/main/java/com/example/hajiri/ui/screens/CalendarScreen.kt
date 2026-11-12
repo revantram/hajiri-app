@@ -15,14 +15,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -30,6 +26,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -39,8 +36,6 @@ import androidx.compose.ui.unit.sp
 import com.example.hajiri.model.AttendanceStatus
 import com.example.hajiri.ui.components.GlassCard
 import com.example.hajiri.ui.theme.AccentIndigo
-import com.example.hajiri.ui.theme.GlassBorder
-import com.example.hajiri.ui.theme.GlassCard
 import com.example.hajiri.ui.theme.StatusBlue
 import com.example.hajiri.ui.theme.StatusBlueBg
 import com.example.hajiri.ui.theme.StatusGreen
@@ -68,7 +63,7 @@ fun CalendarScreen(
     val year = calendarMonth.year
     val month = calendarMonth.monthValue
     val daysInMonth = calendarMonth.lengthOfMonth()
-    val firstDayOfWeek = calendarMonth.atDay(1).dayOfWeek.value % 7 // Sunday = 0, Monday = 1, ...
+    val firstDayOfWeek = calendarMonth.atDay(1).dayOfWeek.value % 7
 
     Column(
         modifier = modifier
@@ -96,15 +91,16 @@ fun CalendarScreen(
 
             Surface(
                 shape = RoundedCornerShape(50),
-                color = GlassCard,
-                border = BorderStroke(1.dp, GlassBorder)
+                color = Color.White.copy(alpha = 0.85f),
+                border = BorderStroke(1.dp, Color.White),
+                modifier = Modifier.shadow(4.dp, RoundedCornerShape(50), spotColor = Color(0x1A000000))
             ) {
                 Text(
                     text = DateUtils.formatHindiMonthYear(calendarMonth),
                     fontSize = 12.sp,
-                    color = TextSecondary,
-                    fontWeight = FontWeight.Medium,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                    color = TextPrimary,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
                 )
             }
         }
@@ -119,57 +115,59 @@ fun CalendarScreen(
                 ) {
                     Text(
                         text = DateUtils.formatHindiMonthYear(calendarMonth),
-                        fontSize = 17.sp,
-                        fontWeight = FontWeight.Bold,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.ExtraBold,
                         color = TextPrimary
                     )
 
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Surface(
                             shape = CircleShape,
-                            color = GlassCard,
-                            border = BorderStroke(1.dp, GlassBorder),
+                            color = Color.White,
+                            border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
                             modifier = Modifier
-                                .size(34.dp)
+                                .size(36.dp)
+                                .shadow(3.dp, CircleShape, spotColor = Color(0x14000000))
                                 .clickable { viewModel.changeCalendarMonth(-1) }
                         ) {
                             Box(contentAlignment = Alignment.Center) {
-                                Text(text = "‹", fontSize = 20.sp, color = TextPrimary)
+                                Text(text = "‹", fontSize = 22.sp, color = TextPrimary, fontWeight = FontWeight.Bold)
                             }
                         }
 
                         Surface(
                             shape = CircleShape,
-                            color = GlassCard,
-                            border = BorderStroke(1.dp, GlassBorder),
+                            color = Color.White,
+                            border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
                             modifier = Modifier
-                                .size(34.dp)
+                                .size(36.dp)
+                                .shadow(3.dp, CircleShape, spotColor = Color(0x14000000))
                                 .clickable { viewModel.changeCalendarMonth(1) }
                         ) {
                             Box(contentAlignment = Alignment.Center) {
-                                Text(text = "›", fontSize = 20.sp, color = TextPrimary)
+                                Text(text = "›", fontSize = 22.sp, color = TextPrimary, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(18.dp))
 
                 // Day-of-week header row
                 Row(modifier = Modifier.fillMaxWidth()) {
                     DateUtils.HINDI_DAYS_SHORT.forEach { dayName ->
                         Text(
                             text = dayName,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = TextMuted,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TextSecondary,
                             textAlign = TextAlign.Center,
                             modifier = Modifier.weight(1f)
                         )
                     }
                 }
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
                 // Calendar Grid calculation
                 val totalCells = firstDayOfWeek + daysInMonth
@@ -213,7 +211,7 @@ fun CalendarScreen(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(18.dp))
 
                 // Legend
                 Row(
@@ -230,7 +228,7 @@ fun CalendarScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(80.dp))
+        Spacer(modifier = Modifier.height(90.dp))
     }
 }
 
@@ -249,7 +247,7 @@ fun CalendarDayCell(
         AttendanceStatus.ABSENT -> Pair(StatusRedBg, StatusRed)
         AttendanceStatus.HALF -> Pair(StatusYellowBg, StatusYellow)
         AttendanceStatus.LEAVE -> Pair(StatusBlueBg, StatusBlue)
-        null -> Pair(Color.Transparent, if (isSunday) StatusRed.copy(alpha = 0.6f) else TextPrimary)
+        null -> Pair(Color.Transparent, if (isSunday) StatusRed.copy(alpha = 0.8f) else TextPrimary)
     }
 
     Box(
@@ -269,7 +267,7 @@ fun CalendarDayCell(
             Text(
                 text = day.toString(),
                 fontSize = 13.sp,
-                fontWeight = if (isToday || status != null) FontWeight.Bold else FontWeight.Normal,
+                fontWeight = if (isToday || status != null) FontWeight.ExtraBold else FontWeight.Medium,
                 color = textColor
             )
             if (hasNote) {
@@ -287,13 +285,13 @@ fun CalendarDayCell(
 fun LegendItem(color: Color, label: String) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp)
+        horizontalArrangement = Arrangement.spacedBy(5.dp)
     ) {
         Box(
             modifier = Modifier
-                .size(7.dp)
+                .size(8.dp)
                 .background(color, CircleShape)
         )
-        Text(text = label, fontSize = 10.sp, color = TextSecondary)
+        Text(text = label, fontSize = 11.sp, color = TextSecondary, fontWeight = FontWeight.SemiBold)
     }
 }

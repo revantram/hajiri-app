@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -34,6 +33,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
@@ -48,8 +48,6 @@ import com.example.hajiri.ui.components.GlassCard
 import com.example.hajiri.ui.theme.AccentIndigo
 import com.example.hajiri.ui.theme.AccentPurple
 import com.example.hajiri.ui.theme.AdvancePink
-import com.example.hajiri.ui.theme.GlassBorder
-import com.example.hajiri.ui.theme.GlassCard
 import com.example.hajiri.ui.theme.OtOrange
 import com.example.hajiri.ui.theme.StatusBlue
 import com.example.hajiri.ui.theme.StatusGreen
@@ -119,16 +117,18 @@ fun ReportsScreen(
 
                 Surface(
                     shape = RoundedCornerShape(50),
-                    color = if (isSelected) AccentIndigo else GlassCard,
-                    border = BorderStroke(1.dp, if (isSelected) AccentIndigo else GlassBorder),
-                    modifier = Modifier.clickable { viewModel.setReportMonth(mKey) }
+                    color = if (isSelected) AccentIndigo else Color.White,
+                    border = BorderStroke(1.dp, if (isSelected) AccentIndigo else Color(0xFFE2E8F0)),
+                    modifier = Modifier
+                        .shadow(if (isSelected) 6.dp else 2.dp, RoundedCornerShape(50), spotColor = Color(0x1F312E81))
+                        .clickable { viewModel.setReportMonth(mKey) }
                 ) {
                     Text(
                         text = label,
                         fontSize = 12.sp,
                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                         color = if (isSelected) Color.White else TextSecondary,
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp)
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
                     )
                 }
             }
@@ -143,10 +143,10 @@ fun ReportsScreen(
             ) {
                 Column {
                     Text(
-                        text = "उपस्थिति %",
+                        text = "उपस्थिति प्रतिशत",
                         fontSize = 12.sp,
                         color = TextSecondary,
-                        fontWeight = FontWeight.Medium
+                        fontWeight = FontWeight.SemiBold
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
@@ -157,8 +157,9 @@ fun ReportsScreen(
                     )
                     Text(
                         text = "${stats.workedDays} दिन काम किए",
-                        fontSize = 12.sp,
-                        color = TextSecondary
+                        fontSize = 13.sp,
+                        color = AccentIndigo,
+                        fontWeight = FontWeight.Bold
                     )
                 }
 
@@ -169,7 +170,7 @@ fun ReportsScreen(
                 ) {
                     Canvas(modifier = Modifier.fillMaxSize()) {
                         drawCircle(
-                            color = Color.White.copy(alpha = 0.08f),
+                            color = Color(0xFFE2E8F0),
                             style = Stroke(width = 9.dp.toPx())
                         )
                         drawArc(
@@ -190,7 +191,8 @@ fun ReportsScreen(
                         Text(
                             text = "उपस्थिति",
                             fontSize = 9.sp,
-                            color = TextMuted
+                            color = TextMuted,
+                            fontWeight = FontWeight.SemiBold
                         )
                     }
                 }
@@ -202,9 +204,9 @@ fun ReportsScreen(
             Column {
                 Text(
                     text = "पिछले 6 महीने (काम के दिन)",
-                    fontSize = 12.sp,
+                    fontSize = 13.sp,
                     color = TextSecondary,
-                    fontWeight = FontWeight.Medium,
+                    fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(bottom = 12.dp)
                 )
 
@@ -228,9 +230,9 @@ fun ReportsScreen(
                         ) {
                             Text(
                                 text = if (trend.workedDays > 0) trend.workedDays.toInt().toString() else "",
-                                fontSize = 9.sp,
+                                fontSize = 10.sp,
                                 color = if (trend.isSelected) AccentIndigo else TextMuted,
-                                fontWeight = FontWeight.Bold
+                                fontWeight = FontWeight.ExtraBold
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Box(
@@ -242,25 +244,25 @@ fun ReportsScreen(
                                             colors = if (trend.isSelected) {
                                                 listOf(AccentIndigo, AccentPurple)
                                             } else {
-                                                listOf(Color.White.copy(alpha = 0.2f), Color.White.copy(alpha = 0.05f))
+                                                listOf(Color(0xFFCBD5E1), Color(0xFFE2E8F0))
                                             }
                                         ),
-                                        shape = RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp)
+                                        shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp)
                                     )
                             )
                         }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.height(8.dp))
 
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     trends.forEach { trend ->
                         Text(
                             text = trend.labelShort,
-                            fontSize = 10.sp,
-                            color = if (trend.isSelected) AccentIndigo else TextMuted,
-                            fontWeight = if (trend.isSelected) FontWeight.Bold else FontWeight.Normal,
+                            fontSize = 11.sp,
+                            color = if (trend.isSelected) AccentIndigo else TextSecondary,
+                            fontWeight = if (trend.isSelected) FontWeight.Bold else FontWeight.Medium,
                             textAlign = TextAlign.Center,
                             modifier = Modifier.weight(1f)
                         )
@@ -274,9 +276,9 @@ fun ReportsScreen(
             Column {
                 Text(
                     text = "इस महीने का हिसाब",
-                    fontSize = 12.sp,
+                    fontSize = 13.sp,
                     color = TextSecondary,
-                    fontWeight = FontWeight.Medium,
+                    fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(bottom = 8.dp)
                 )
 
@@ -287,13 +289,17 @@ fun ReportsScreen(
                 BreakdownRow("⏰ ओवरटाइम", "${stats.totalOtHours} घंटे", OtOrange)
                 BreakdownRow("💳 एडवांस", "-₹${DateUtils.formatInr(stats.totalAdvance)}", AdvancePink)
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(AccentIndigo.copy(alpha = 0.15f), RoundedCornerShape(12.dp))
-                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                        .shadow(4.dp, RoundedCornerShape(14.dp), spotColor = Color(0x1F10B981))
+                        .background(
+                            brush = Brush.linearGradient(listOf(Color(0xFFECFDF5), Color(0xFFD1FAE5))),
+                            shape = RoundedCornerShape(14.dp)
+                        )
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -301,11 +307,11 @@ fun ReportsScreen(
                         text = "🤑 हाथ में आएगा",
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
-                        color = TextPrimary
+                        color = Color(0xFF065F46)
                     )
                     Text(
                         text = "₹${DateUtils.formatInr(stats.netTakeHome)}",
-                        fontSize = 20.sp,
+                        fontSize = 22.sp,
                         fontWeight = FontWeight.ExtraBold,
                         color = StatusGreen
                     )
@@ -318,9 +324,9 @@ fun ReportsScreen(
             Column {
                 Text(
                     text = "Export & Share",
-                    fontSize = 12.sp,
+                    fontSize = 13.sp,
                     color = TextSecondary,
-                    fontWeight = FontWeight.Medium,
+                    fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(bottom = 12.dp)
                 )
 
@@ -331,14 +337,17 @@ fun ReportsScreen(
                         val clip = ClipData.newPlainText("Hajiri Report", reportText)
                         clipboard.setPrimaryClip(clip)
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = StatusGreen),
-                    shape = RoundedCornerShape(13.dp),
-                    modifier = Modifier.fillMaxWidth().testTag("copy_report_btn")
+                    colors = ButtonDefaults.buttonColors(containerColor = AccentIndigo),
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp)
+                        .testTag("copy_report_btn")
                 ) {
-                    Text("📄 Report Copy करें", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    Text("📄 Report Copy करें", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                 }
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
                 Button(
                     onClick = {
@@ -351,15 +360,18 @@ fun ReportsScreen(
                         context.startActivity(Intent.createChooser(sendIntent, "Share Hajiri Report"))
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF25D366)),
-                    shape = RoundedCornerShape(13.dp),
-                    modifier = Modifier.fillMaxWidth().testTag("share_whatsapp_btn")
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp)
+                        .testTag("share_whatsapp_btn")
                 ) {
-                    Text("💬 WhatsApp पर Share करें", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    Text("💬 WhatsApp पर Share करें", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(80.dp))
+        Spacer(modifier = Modifier.height(90.dp))
     }
 }
 
@@ -369,13 +381,13 @@ fun BreakdownRow(label: String, value: String, valueColor: Color) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 8.dp),
+                .padding(vertical = 9.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(text = label, fontSize = 13.sp, color = TextSecondary)
-            Text(text = value, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = valueColor)
+            Text(text = label, fontSize = 13.sp, color = TextSecondary, fontWeight = FontWeight.Medium)
+            Text(text = value, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = valueColor)
         }
-        HorizontalDivider(color = Color.White.copy(alpha = 0.05f))
+        HorizontalDivider(color = Color(0xFFF1F5F9))
     }
 }

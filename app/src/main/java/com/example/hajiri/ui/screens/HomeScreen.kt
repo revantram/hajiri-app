@@ -3,6 +3,7 @@ package com.example.hajiri.ui.screens
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -34,6 +35,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
@@ -46,15 +48,21 @@ import com.example.hajiri.model.AttendanceStatus
 import com.example.hajiri.ui.components.GlassCard
 import com.example.hajiri.ui.components.outlinedFieldColors
 import com.example.hajiri.ui.theme.AccentIndigo
-import com.example.hajiri.ui.theme.AccentPurple
 import com.example.hajiri.ui.theme.AdvancePink
-import com.example.hajiri.ui.theme.GlassBorder
-import com.example.hajiri.ui.theme.GlassCard
+import com.example.hajiri.ui.theme.AdvancePinkBg
+import com.example.hajiri.ui.theme.LiquidGlassBorder
+import com.example.hajiri.ui.theme.LiquidGlassCard
 import com.example.hajiri.ui.theme.OtOrange
+import com.example.hajiri.ui.theme.OtOrangeBg
 import com.example.hajiri.ui.theme.StatusBlue
+import com.example.hajiri.ui.theme.StatusBlueBg
 import com.example.hajiri.ui.theme.StatusGreen
+import com.example.hajiri.ui.theme.StatusGreenBg
+import com.example.hajiri.ui.theme.StatusGreenBright
 import com.example.hajiri.ui.theme.StatusRed
+import com.example.hajiri.ui.theme.StatusRedBg
 import com.example.hajiri.ui.theme.StatusYellow
+import com.example.hajiri.ui.theme.StatusYellowBg
 import com.example.hajiri.ui.theme.TextMuted
 import com.example.hajiri.ui.theme.TextPrimary
 import com.example.hajiri.ui.theme.TextSecondary
@@ -91,34 +99,54 @@ fun HomeScreen(
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         item {
-            // Header
+            // Header: Apple Dynamic Island / Capsule Header style
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 16.dp, bottom = 4.dp),
+                    .padding(top = 14.dp, bottom = 4.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(text = "📋 ", fontSize = 24.sp)
-                    Text(
-                        text = "हाजिरी",
-                        fontSize = 24.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = TextPrimary
-                    )
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .shadow(6.dp, CircleShape, spotColor = Color(0x334F46E5))
+                            .background(
+                                brush = Brush.linearGradient(listOf(Color(0xFF6366F1), Color(0xFF4338CA))),
+                                shape = CircleShape
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(text = "📋", fontSize = 20.sp)
+                    }
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column {
+                        Text(
+                            text = "हाजिरी",
+                            fontSize = 24.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = TextPrimary
+                        )
+                        Text(
+                            text = "Daily Attendance & Salary",
+                            fontSize = 11.sp,
+                            color = TextMuted,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
                 }
 
                 Surface(
                     shape = RoundedCornerShape(50),
-                    color = GlassCard,
-                    border = BorderStroke(1.dp, GlassBorder),
-                    modifier = Modifier.clickable {
-                        viewModel.showAuth(true)
-                    }
+                    color = Color.White.copy(alpha = 0.85f),
+                    border = BorderStroke(1.dp, Color.White),
+                    modifier = Modifier
+                        .shadow(4.dp, RoundedCornerShape(50), spotColor = Color(0x1A000000))
+                        .clickable { viewModel.showAuth(true) }
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
@@ -133,61 +161,80 @@ fun HomeScreen(
                         Text(
                             text = currentUser?.name ?: "ऑफलाइन",
                             fontSize = 12.sp,
-                            color = TextSecondary,
-                            fontWeight = FontWeight.Medium
+                            color = TextPrimary,
+                            fontWeight = FontWeight.SemiBold
                         )
                     }
                 }
             }
         }
 
-        // 1. Today Card
+        // 1. Today Card (iPhone 18 Liquid Glass widget)
         item {
             GlassCard(
-                borderColor = AccentIndigo.copy(alpha = 0.5f)
+                borderColor = Color.White
             ) {
                 Column {
-                    Text(
-                        text = "आज की हाजिरी ◦ ${DateUtils.formatHindiDate(today)}",
-                        fontSize = 12.sp,
-                        color = TextMuted,
-                        fontWeight = FontWeight.SemiBold
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "आज की हाजिरी ◦ ${DateUtils.formatHindiDate(today)}",
+                            fontSize = 12.sp,
+                            color = TextMuted,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            text = "LIVE",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = AccentIndigo,
+                            modifier = Modifier
+                                .background(AccentIndigo.copy(alpha = 0.1f), RoundedCornerShape(50))
+                                .padding(horizontal = 8.dp, vertical = 2.dp)
+                        )
+                    }
+
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = DateUtils.formatHindiDayAndDate(today),
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.ExtraBold,
                         color = TextPrimary
                     )
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // 2x2 marking buttons
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    // 2x2 marking buttons: iPhone 3D Liquid tactile buttons
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         AttendanceButton(
-                            title = "✅ हाजिर",
+                            title = "हाजिर",
+                            icon = "✅",
                             status = AttendanceStatus.PRESENT,
                             isSelected = todayRecord?.status == AttendanceStatus.PRESENT,
-                            gradientColors = listOf(Color(0xFF22C55E), Color(0xFF16A34A)),
+                            gradientColors = listOf(Color(0xFF10B981), Color(0xFF059669)),
                             modifier = Modifier.weight(1f).testTag("mark_present_btn"),
                             onClick = { viewModel.markToday(AttendanceStatus.PRESENT) }
                         )
                         AttendanceButton(
-                            title = "❌ गैरहाजिर",
+                            title = "गैरहाजिर",
+                            icon = "❌",
                             status = AttendanceStatus.ABSENT,
                             isSelected = todayRecord?.status == AttendanceStatus.ABSENT,
-                            gradientColors = listOf(Color(0xFFEF4444), Color(0xFFDC2626)),
+                            gradientColors = listOf(Color(0xFFF43F5E), Color(0xFFE11D48)),
                             modifier = Modifier.weight(1f).testTag("mark_absent_btn"),
                             onClick = { viewModel.markToday(AttendanceStatus.ABSENT) }
                         )
                     }
 
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
 
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         AttendanceButton(
-                            title = "🌓 आधा दिन",
+                            title = "आधा दिन",
+                            icon = "🌓",
                             status = AttendanceStatus.HALF,
                             isSelected = todayRecord?.status == AttendanceStatus.HALF,
                             gradientColors = listOf(Color(0xFFF59E0B), Color(0xFFD97706)),
@@ -195,45 +242,44 @@ fun HomeScreen(
                             onClick = { viewModel.markToday(AttendanceStatus.HALF) }
                         )
                         AttendanceButton(
-                            title = "✈️ छुट्टी",
+                            title = "छुट्टी",
+                            icon = "✈️",
                             status = AttendanceStatus.LEAVE,
                             isSelected = todayRecord?.status == AttendanceStatus.LEAVE,
-                            gradientColors = listOf(Color(0xFF3B82F6), Color(0xFF2563EB)),
+                            gradientColors = listOf(Color(0xFF0EA5E9), Color(0xFF0284C7)),
                             modifier = Modifier.weight(1f).testTag("mark_leave_btn"),
                             onClick = { viewModel.markToday(AttendanceStatus.LEAVE) }
                         )
                     }
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(14.dp))
 
-                    // Status Pill
+                    // Status Capsule Pill
+                    val (statusBg, statusTextColor) = when (todayRecord?.status) {
+                        AttendanceStatus.PRESENT -> Pair(StatusGreenBg, StatusGreen)
+                        AttendanceStatus.ABSENT -> Pair(StatusRedBg, StatusRed)
+                        AttendanceStatus.HALF -> Pair(StatusYellowBg, StatusYellow)
+                        AttendanceStatus.LEAVE -> Pair(StatusBlueBg, StatusBlue)
+                        null -> Pair(Color(0xFFF1F5F9), TextSecondary)
+                    }
+
                     Row(
                         modifier = Modifier
-                            .background(
-                                color = if (todayRecord != null) {
-                                    Color(todayRecord.status.dotColorHex).copy(alpha = 0.15f)
-                                } else {
-                                    Color.White.copy(alpha = 0.05f)
-                                },
-                                shape = RoundedCornerShape(50)
-                            )
-                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                            .background(statusBg, RoundedCornerShape(50))
+                            .padding(horizontal = 14.dp, vertical = 7.dp),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Box(
                             modifier = Modifier
                                 .size(8.dp)
-                                .background(
-                                    color = if (todayRecord != null) Color(todayRecord.status.dotColorHex) else TextMuted,
-                                    shape = CircleShape
-                                )
+                                .background(statusTextColor, CircleShape)
                         )
                         Text(
-                            text = if (todayRecord != null) "आज: ${todayRecord.status.labelHindi}" else "अभी तक नहीं भरी",
+                            text = if (todayRecord != null) "आज दर्ज स्थिति: ${todayRecord.status.labelHindi}" else "आज की हाजिरी अभी बाकी है",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
-                            color = if (todayRecord != null) Color(todayRecord.status.dotColorHex) else TextSecondary
+                            color = statusTextColor
                         )
                     }
 
@@ -245,19 +291,19 @@ fun HomeScreen(
                                 onValueChange = { noteInputText = it },
                                 placeholder = { Text("आज का नोट लिखें (वैकल्पिक)...", color = TextMuted, fontSize = 13.sp) },
                                 modifier = Modifier.fillMaxWidth().testTag("today_note_input"),
+                                shape = RoundedCornerShape(14.dp),
                                 colors = outlinedFieldColors(),
                                 maxLines = 2
                             )
-                            Spacer(modifier = Modifier.height(6.dp))
+                            Spacer(modifier = Modifier.height(8.dp))
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                                 Button(
                                     onClick = { viewModel.saveTodayNote(noteInputText) },
-                                    colors = ButtonDefaults.buttonColors(containerColor = AccentIndigo.copy(alpha = 0.35f)),
-                                    border = BorderStroke(1.dp, AccentIndigo),
-                                    shape = RoundedCornerShape(8.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = AccentIndigo),
+                                    shape = RoundedCornerShape(12.dp),
                                     modifier = Modifier.testTag("save_note_btn")
                                 ) {
-                                    Text("नोट सेव करें ✓", color = Color(0xFFA5B4FC), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    Text("नोट सेव करें ✓", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                                 }
                             }
                         }
@@ -266,28 +312,38 @@ fun HomeScreen(
             }
         }
 
-        // 2. Streak Banner
+        // 2. Streak Banner (Liquid Glass Flame Pod)
         item {
-            GlassCard {
+            GlassCard(
+                borderColor = Color.White.copy(alpha = 0.9f)
+            ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(text = "🔥", fontSize = 28.sp)
-                        Spacer(modifier = Modifier.width(10.dp))
+                        Box(
+                            modifier = Modifier
+                                .size(46.dp)
+                                .background(OtOrangeBg, CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(text = "🔥", fontSize = 24.sp)
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
                         Column {
                             Text(
                                 text = "${streakPair.first} दिन",
-                                fontSize = 24.sp,
+                                fontSize = 22.sp,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = OtOrange
                             )
                             Text(
-                                text = "लगातार हाजिरी",
+                                text = "लगातार हाजिरी स्ट्रीक",
                                 fontSize = 11.sp,
-                                color = TextSecondary
+                                color = TextSecondary,
+                                fontWeight = FontWeight.Medium
                             )
                         }
                     }
@@ -295,34 +351,35 @@ fun HomeScreen(
                     Column(horizontalAlignment = Alignment.End) {
                         Text(
                             text = "${streakPair.second} दिन",
-                            fontSize = 18.sp,
+                            fontSize = 17.sp,
                             fontWeight = FontWeight.Bold,
                             color = StatusYellow
                         )
                         Text(
                             text = "🏆 सबसे बड़ा स्ट्रीक",
                             fontSize = 10.sp,
-                            color = TextMuted
+                            color = TextMuted,
+                            fontWeight = FontWeight.Medium
                         )
                     }
                 }
             }
         }
 
-        // 3. Stats Row
+        // 3. Stats Row (4 Liquid Frosted Pods)
         item {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                StatCard("हाजिर", stats.presentDays.toString(), StatusGreen, Modifier.weight(1f))
-                StatCard("गैरहाजिर", stats.absentDays.toString(), StatusRed, Modifier.weight(1f))
-                StatCard("आधा दिन", stats.halfDays.toString(), StatusYellow, Modifier.weight(1f))
-                StatCard("छुट्टी", stats.leaveDays.toString(), StatusBlue, Modifier.weight(1f))
+                StatCard("हाजिर", stats.presentDays.toString(), StatusGreen, StatusGreenBg, Modifier.weight(1f))
+                StatCard("गैरहाजिर", stats.absentDays.toString(), StatusRed, StatusRedBg, Modifier.weight(1f))
+                StatCard("आधा दिन", stats.halfDays.toString(), StatusYellow, StatusYellowBg, Modifier.weight(1f))
+                StatCard("छुट्टी", stats.leaveDays.toString(), StatusBlue, StatusBlueBg, Modifier.weight(1f))
             }
         }
 
-        // 4. Salary Card
+        // 4. Salary Card (Apple Finance Liquid Glass)
         item {
             GlassCard {
                 Column {
@@ -331,24 +388,27 @@ fun HomeScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = "💰 इस महीने की कमाई",
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = TextSecondary
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(text = "💰 ", fontSize = 16.sp)
+                            Text(
+                                text = "इस महीने की कमाई",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = TextSecondary
+                            )
+                        }
                         Surface(
                             shape = RoundedCornerShape(50),
-                            color = AccentIndigo.copy(alpha = 0.2f),
-                            border = BorderStroke(1.dp, AccentIndigo.copy(alpha = 0.4f)),
+                            color = AccentIndigo.copy(alpha = 0.1f),
+                            border = BorderStroke(1.dp, AccentIndigo.copy(alpha = 0.3f)),
                             modifier = Modifier.clickable { viewModel.showSalaryDialog.value = true }
                         ) {
                             Text(
                                 text = "⚙️ सेट करें",
                                 fontSize = 11.sp,
-                                color = Color(0xFF818CF8),
+                                color = AccentIndigo,
                                 fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
                             )
                         }
                     }
@@ -357,12 +417,12 @@ fun HomeScreen(
 
                     Text(
                         text = "₹${DateUtils.formatInr(stats.baseEarnings)}",
-                        fontSize = 32.sp,
+                        fontSize = 34.sp,
                         fontWeight = FontWeight.ExtraBold,
                         color = StatusGreen
                     )
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(14.dp))
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -390,25 +450,29 @@ fun HomeScreen(
 
                     LinearProgressIndicator(
                         progress = { progress },
-                        modifier = Modifier.fillMaxWidth().height(6.dp),
-                        color = StatusGreen,
-                        trackColor = Color.White.copy(alpha = 0.08f)
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(7.dp),
+                        color = StatusGreenBright,
+                        trackColor = Color(0xFFE2E8F0)
                     )
 
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End
+                        horizontalArrangement = Arrangement.End,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
                             text = "हाथ में आएगा: ",
                             fontSize = 12.sp,
-                            color = TextMuted
+                            color = TextSecondary,
+                            fontWeight = FontWeight.Medium
                         )
                         Text(
                             text = "₹${DateUtils.formatInr(stats.netTakeHome)}",
-                            fontSize = 13.sp,
+                            fontSize = 14.sp,
                             fontWeight = FontWeight.ExtraBold,
                             color = StatusGreen
                         )
@@ -427,7 +491,7 @@ fun HomeScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column {
-                            Text(text = "⏰ ओवरटाइम", fontSize = 12.sp, color = TextSecondary)
+                            Text(text = "⏰ ओवरटाइम", fontSize = 12.sp, color = TextSecondary, fontWeight = FontWeight.Medium)
                             Text(
                                 text = "${stats.totalOtHours} घंटे",
                                 fontSize = 20.sp,
@@ -436,11 +500,11 @@ fun HomeScreen(
                             )
                         }
                         Column(horizontalAlignment = Alignment.End) {
-                            Text(text = "OT कमाई", fontSize = 12.sp, color = TextSecondary)
+                            Text(text = "OT कमाई", fontSize = 12.sp, color = TextSecondary, fontWeight = FontWeight.Medium)
                             Text(
                                 text = "₹${DateUtils.formatInr(stats.otEarnings)}",
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Bold,
+                                fontSize = 17.sp,
+                                fontWeight = FontWeight.ExtraBold,
                                 color = OtOrange
                             )
                         }
@@ -459,6 +523,7 @@ fun HomeScreen(
                             placeholder = { Text("आज के OT घंटे (जैसे: 1.5)", fontSize = 13.sp) },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                             modifier = Modifier.weight(1f).testTag("ot_hours_input"),
+                            shape = RoundedCornerShape(14.dp),
                             colors = outlinedFieldColors(),
                             singleLine = true
                         )
@@ -472,7 +537,7 @@ fun HomeScreen(
                                 }
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = OtOrange),
-                            shape = RoundedCornerShape(12.dp),
+                            shape = RoundedCornerShape(14.dp),
                             modifier = Modifier.testTag("add_ot_btn")
                         ) {
                             Text("➕ जोड़ें", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
@@ -492,7 +557,7 @@ fun HomeScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column {
-                            Text(text = "💳 एडवांस / उधार", fontSize = 12.sp, color = TextSecondary)
+                            Text(text = "💳 एडवांस / उधार", fontSize = 12.sp, color = TextSecondary, fontWeight = FontWeight.Medium)
                             Text(
                                 text = "₹${DateUtils.formatInr(stats.totalAdvance)}",
                                 fontSize = 20.sp,
@@ -504,7 +569,7 @@ fun HomeScreen(
                         Button(
                             onClick = { viewModel.showAdvanceDialog.value = true },
                             colors = ButtonDefaults.buttonColors(containerColor = AdvancePink),
-                            shape = RoundedCornerShape(11.dp),
+                            shape = RoundedCornerShape(12.dp),
                             modifier = Modifier.testTag("open_advance_modal_btn")
                         ) {
                             Text("+ एडवांस जोड़ें", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
@@ -516,7 +581,7 @@ fun HomeScreen(
                     val monthAdvances = advances.filter { it.dateKey.startsWith(viewModel.todayMonthKey) }
                     if (monthAdvances.isEmpty()) {
                         Text(
-                            text = "इस महीने कोई एडवांस नहीं",
+                            text = "इस महीने कोई एडवांस दर्ज नहीं है",
                             fontSize = 12.sp,
                             color = TextMuted,
                             modifier = Modifier.padding(vertical = 8.dp)
@@ -548,7 +613,7 @@ fun HomeScreen(
                     text = "हालिया हाजिरी",
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
-                    color = TextMuted,
+                    color = TextSecondary,
                     letterSpacing = 0.8.sp
                 )
                 Text(
@@ -582,6 +647,13 @@ fun HomeScreen(
                 val date = DateUtils.parseDateKey(entry.key)
                 val ot = otHours[entry.key]
 
+                val (dotCol, bgCol, textCol) = when (entry.value.status) {
+                    AttendanceStatus.PRESENT -> Triple(StatusGreen, StatusGreenBg, StatusGreen)
+                    AttendanceStatus.ABSENT -> Triple(StatusRed, StatusRedBg, StatusRed)
+                    AttendanceStatus.HALF -> Triple(StatusYellow, StatusYellowBg, StatusYellow)
+                    AttendanceStatus.LEAVE -> Triple(StatusBlue, StatusBlueBg, StatusBlue)
+                }
+
                 GlassCard {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -590,14 +662,14 @@ fun HomeScreen(
                         Box(
                             modifier = Modifier
                                 .size(10.dp)
-                                .background(Color(entry.value.status.dotColorHex), CircleShape)
+                                .background(dotCol, CircleShape)
                         )
                         Spacer(modifier = Modifier.width(12.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = if (date != null) DateUtils.formatHindiDate(date) else entry.key,
                                 fontSize = 14.sp,
-                                fontWeight = FontWeight.SemiBold,
+                                fontWeight = FontWeight.Bold,
                                 color = TextPrimary
                             )
                             val dayText = if (date != null) {
@@ -607,25 +679,25 @@ fun HomeScreen(
                             Text(
                                 text = dayText,
                                 fontSize = 11.sp,
-                                color = TextMuted
+                                color = TextSecondary
                             )
                             if (entry.value.note.isNotBlank()) {
                                 Text(
                                     text = "📝 ${entry.value.note}",
                                     fontSize = 11.sp,
                                     fontStyle = FontStyle.Italic,
-                                    color = TextSecondary
+                                    color = TextMuted
                                 )
                             }
                         }
 
                         Surface(
                             shape = RoundedCornerShape(50),
-                            color = Color(entry.value.status.dotColorHex).copy(alpha = 0.15f)
+                            color = bgCol
                         ) {
                             Text(
                                 text = entry.value.status.labelHindi,
-                                color = Color(entry.value.status.dotColorHex),
+                                color = textCol,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
@@ -637,7 +709,7 @@ fun HomeScreen(
         }
 
         item {
-            Spacer(modifier = Modifier.height(80.dp))
+            Spacer(modifier = Modifier.height(90.dp))
         }
     }
 }
@@ -645,6 +717,7 @@ fun HomeScreen(
 @Composable
 fun AttendanceButton(
     title: String,
+    icon: String,
     status: AttendanceStatus,
     isSelected: Boolean,
     gradientColors: List<Color>,
@@ -654,21 +727,30 @@ fun AttendanceButton(
     Button(
         onClick = onClick,
         colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
-        border = if (isSelected) BorderStroke(2.dp, Color.White) else null,
-        shape = RoundedCornerShape(13.dp),
+        border = if (isSelected) BorderStroke(2.5.dp, Color.White) else null,
+        shape = RoundedCornerShape(16.dp),
         modifier = modifier
+            .shadow(
+                elevation = if (isSelected) 8.dp else 4.dp,
+                shape = RoundedCornerShape(16.dp),
+                spotColor = gradientColors.first().copy(alpha = 0.4f)
+            )
             .background(
                 brush = Brush.linearGradient(gradientColors),
-                shape = RoundedCornerShape(13.dp)
+                shape = RoundedCornerShape(16.dp)
             )
-            .height(48.dp)
+            .height(52.dp)
     ) {
-        Text(
-            text = if (isSelected) "$title ✓" else title,
-            color = Color.White,
-            fontWeight = FontWeight.Bold,
-            fontSize = 13.sp
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(text = icon, fontSize = 15.sp)
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                text = if (isSelected) "$title ✓" else title,
+                color = Color.White,
+                fontWeight = FontWeight.ExtraBold,
+                fontSize = 13.sp
+            )
+        }
     }
 }
 
@@ -677,11 +759,12 @@ fun StatCard(
     label: String,
     count: String,
     accentColor: Color,
+    bgColor: Color,
     modifier: Modifier = Modifier
 ) {
     GlassCard(
         modifier = modifier,
-        contentPadding = 12.dp
+        contentPadding = 10.dp
     ) {
         Column(
             modifier = Modifier.fillMaxWidth(),
@@ -690,7 +773,7 @@ fun StatCard(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(2.5.dp)
+                    .height(3.dp)
                     .background(accentColor, RoundedCornerShape(2.dp))
             )
             Spacer(modifier = Modifier.height(8.dp))
@@ -718,7 +801,8 @@ fun AdvanceItemRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(AdvancePink.copy(alpha = 0.08f), RoundedCornerShape(10.dp))
+            .background(Color.White.copy(alpha = 0.7f), RoundedCornerShape(12.dp))
+            .border(1.dp, Color(0xFFFCE7F3), RoundedCornerShape(12.dp))
             .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween

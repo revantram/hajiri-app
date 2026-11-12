@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -36,6 +37,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -52,11 +55,14 @@ import com.example.hajiri.ui.screens.HomeScreen
 import com.example.hajiri.ui.screens.ReportsScreen
 import com.example.hajiri.ui.screens.SettingsScreen
 import com.example.hajiri.ui.theme.AccentIndigo
-import com.example.hajiri.ui.theme.DarkBackground
-import com.example.hajiri.ui.theme.GlassBorder
 import com.example.hajiri.ui.theme.HajiriTheme
+import com.example.hajiri.ui.theme.LightBackground
+import com.example.hajiri.ui.theme.LiquidGlassCardHigh
+import com.example.hajiri.ui.theme.LiquidMeshBottom
+import com.example.hajiri.ui.theme.LiquidMeshCenter
+import com.example.hajiri.ui.theme.LiquidMeshTopLeft
+import com.example.hajiri.ui.theme.LiquidMeshTopRight
 import com.example.hajiri.ui.theme.TextMuted
-import com.example.hajiri.ui.theme.TextSecondary
 import com.example.hajiri.viewmodel.HajiriTab
 import com.example.hajiri.viewmodel.HajiriViewModel
 
@@ -104,10 +110,21 @@ fun MainApp(viewModel: HajiriViewModel) {
         }
     }
 
+    // Ethereal Liquid Iridescent Ambient Background
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(DarkBackground)
+            .background(
+                brush = Brush.verticalGradient(
+                    colors = listOf(
+                        LightBackground,
+                        LiquidMeshTopLeft.copy(alpha = 0.45f),
+                        LiquidMeshCenter.copy(alpha = 0.35f),
+                        LiquidMeshTopRight.copy(alpha = 0.35f),
+                        LiquidMeshBottom.copy(alpha = 0.45f)
+                    )
+                )
+            )
     ) {
         Scaffold(
             contentWindowInsets = WindowInsets.systemBars,
@@ -115,11 +132,11 @@ fun MainApp(viewModel: HajiriViewModel) {
             snackbarHost = {
                 SnackbarHost(
                     hostState = snackbarHostState,
-                    modifier = Modifier.padding(bottom = 75.dp)
+                    modifier = Modifier.padding(bottom = 95.dp)
                 )
             },
             bottomBar = {
-                HajiriBottomNavBar(
+                FloatingLiquidDock(
                     selectedTab = currentTab,
                     onTabSelected = { viewModel.setTab(it) }
                 )
@@ -195,52 +212,76 @@ fun MainApp(viewModel: HajiriViewModel) {
 }
 
 @Composable
-fun HajiriBottomNavBar(
+fun FloatingLiquidDock(
     selectedTab: HajiriTab,
     onTabSelected: (HajiriTab) -> Unit
 ) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        color = Color(0xF207071A),
-        border = BorderStroke(1.dp, GlassBorder)
-    ) {
-        val navInsets = WindowInsets.navigationBars.asPaddingValues()
+    val navInsets = WindowInsets.navigationBars.asPaddingValues()
 
-        Row(
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(
+                start = 16.dp,
+                end = 16.dp,
+                bottom = 10.dp + navInsets.calculateBottomPadding()
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(
-                    start = 8.dp,
-                    end = 8.dp,
-                    top = 8.dp,
-                    bottom = 8.dp + navInsets.calculateBottomPadding()
+                .shadow(
+                    elevation = 16.dp,
+                    shape = RoundedCornerShape(32.dp),
+                    ambientColor = Color(0x1F000000),
+                    spotColor = Color(0x2E312E81)
                 ),
-            horizontalArrangement = Arrangement.SpaceAround,
-            verticalAlignment = Alignment.CenterVertically
+            shape = RoundedCornerShape(32.dp),
+            color = LiquidGlassCardHigh,
+            border = BorderStroke(
+                width = 1.2.dp,
+                brush = Brush.verticalGradient(
+                    colors = listOf(
+                        Color.White,
+                        Color(0xB3FFFFFF),
+                        Color(0x334F46E5)
+                    )
+                )
+            )
         ) {
-            HajiriTab.entries.forEach { tab ->
-                val isSelected = tab == selectedTab
-                Surface(
-                    shape = RoundedCornerShape(14.dp),
-                    color = if (isSelected) AccentIndigo.copy(alpha = 0.16f) else Color.Transparent,
-                    modifier = Modifier
-                        .clickable { onTabSelected(tab) }
-                        .testTag("nav_tab_${tab.name.lowercase()}")
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 7.dp),
+                horizontalArrangement = Arrangement.SpaceAround,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                HajiriTab.entries.forEach { tab ->
+                    val isSelected = tab == selectedTab
+                    Surface(
+                        shape = RoundedCornerShape(20.dp),
+                        color = if (isSelected) AccentIndigo.copy(alpha = 0.12f) else Color.Transparent,
+                        border = if (isSelected) BorderStroke(1.dp, AccentIndigo.copy(alpha = 0.25f)) else null,
+                        modifier = Modifier
+                            .clickable { onTabSelected(tab) }
+                            .testTag("nav_tab_${tab.name.lowercase()}")
                     ) {
-                        Text(
-                            text = tab.iconText,
-                            fontSize = 20.sp
-                        )
-                        Text(
-                            text = tab.label,
-                            fontSize = 10.sp,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                            color = if (isSelected) AccentIndigo else TextMuted
-                        )
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
+                        ) {
+                            Text(
+                                text = tab.iconText,
+                                fontSize = 19.sp
+                            )
+                            Text(
+                                text = tab.label,
+                                fontSize = 10.sp,
+                                fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Medium,
+                                color = if (isSelected) AccentIndigo else TextMuted
+                            )
+                        }
                     }
                 }
             }

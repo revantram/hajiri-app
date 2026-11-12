@@ -1,5 +1,6 @@
 package com.example.hajiri.ui.components
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -24,8 +25,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -34,9 +35,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.example.hajiri.ui.theme.AccentIndigo
-import com.example.hajiri.ui.theme.GlassBorder
+import com.example.hajiri.ui.theme.LiquidGlassBorder
+import com.example.hajiri.ui.theme.LiquidGlassCardHigh
 import com.example.hajiri.ui.theme.StatusRed
-import com.example.hajiri.ui.theme.SurfaceDark
 import com.example.hajiri.ui.theme.TextPrimary
 import com.example.hajiri.ui.theme.TextSecondary
 
@@ -52,9 +53,10 @@ fun SalaryDialog(
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
-            shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(containerColor = SurfaceDark),
-            border = androidx.compose.foundation.BorderStroke(1.dp, GlassBorder)
+            shape = RoundedCornerShape(28.dp),
+            colors = CardDefaults.cardColors(containerColor = LiquidGlassCardHigh),
+            border = BorderStroke(1.2.dp, Color.White),
+            modifier = Modifier.shadow(16.dp, RoundedCornerShape(28.dp), spotColor = Color(0x24312E81))
         ) {
             Column(
                 modifier = Modifier
@@ -76,6 +78,7 @@ fun SalaryDialog(
                     placeholder = { Text("जैसे: 15000") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth().testTag("salary_input"),
+                    shape = RoundedCornerShape(14.dp),
                     colors = outlinedFieldColors()
                 )
 
@@ -88,6 +91,7 @@ fun SalaryDialog(
                     placeholder = { Text("जैसे: 100") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth().testTag("ot_rate_input"),
+                    shape = RoundedCornerShape(14.dp),
                     colors = outlinedFieldColors()
                 )
 
@@ -99,9 +103,10 @@ fun SalaryDialog(
                 ) {
                     OutlinedButton(
                         onClick = onDismiss,
-                        shape = RoundedCornerShape(12.dp)
+                        shape = RoundedCornerShape(14.dp),
+                        border = BorderStroke(1.dp, Color(0x330F172A))
                     ) {
-                        Text("रद्द करें", color = TextSecondary)
+                        Text("रद्द करें", color = TextSecondary, fontWeight = FontWeight.SemiBold)
                     }
                     Spacer(modifier = Modifier.width(12.dp))
                     Button(
@@ -111,7 +116,7 @@ fun SalaryDialog(
                             onSave(sal, otr)
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = AccentIndigo),
-                        shape = RoundedCornerShape(12.dp),
+                        shape = RoundedCornerShape(14.dp),
                         modifier = Modifier.testTag("save_salary_button")
                     ) {
                         Text("💾 सेव करें", color = Color.White, fontWeight = FontWeight.Bold)
@@ -132,9 +137,10 @@ fun WorkDaysDialog(
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
-            shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(containerColor = SurfaceDark),
-            border = androidx.compose.foundation.BorderStroke(1.dp, GlassBorder)
+            shape = RoundedCornerShape(28.dp),
+            colors = CardDefaults.cardColors(containerColor = LiquidGlassCardHigh),
+            border = BorderStroke(1.2.dp, Color.White),
+            modifier = Modifier.shadow(16.dp, RoundedCornerShape(28.dp), spotColor = Color(0x24312E81))
         ) {
             Column(
                 modifier = Modifier
@@ -156,6 +162,7 @@ fun WorkDaysDialog(
                     placeholder = { Text("जैसे: 26") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth().testTag("workdays_input"),
+                    shape = RoundedCornerShape(14.dp),
                     colors = outlinedFieldColors()
                 )
 
@@ -167,9 +174,10 @@ fun WorkDaysDialog(
                 ) {
                     OutlinedButton(
                         onClick = onDismiss,
-                        shape = RoundedCornerShape(12.dp)
+                        shape = RoundedCornerShape(14.dp),
+                        border = BorderStroke(1.dp, Color(0x330F172A))
                     ) {
-                        Text("रद्द करें", color = TextSecondary)
+                        Text("रद्द करें", color = TextSecondary, fontWeight = FontWeight.SemiBold)
                     }
                     Spacer(modifier = Modifier.width(12.dp))
                     Button(
@@ -178,7 +186,7 @@ fun WorkDaysDialog(
                             onSave(wd.coerceIn(1, 31))
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = AccentIndigo),
-                        shape = RoundedCornerShape(12.dp),
+                        shape = RoundedCornerShape(14.dp),
                         modifier = Modifier.testTag("save_workdays_button")
                     ) {
                         Text("💾 सेव करें", color = Color.White, fontWeight = FontWeight.Bold)
@@ -199,9 +207,10 @@ fun AddAdvanceDialog(
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
-            shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(containerColor = SurfaceDark),
-            border = androidx.compose.foundation.BorderStroke(1.dp, GlassBorder)
+            shape = RoundedCornerShape(28.dp),
+            colors = CardDefaults.cardColors(containerColor = LiquidGlassCardHigh),
+            border = BorderStroke(1.2.dp, Color.White),
+            modifier = Modifier.shadow(16.dp, RoundedCornerShape(28.dp), spotColor = Color(0x24312E81))
         ) {
             Column(
                 modifier = Modifier
@@ -223,6 +232,7 @@ fun AddAdvanceDialog(
                     placeholder = { Text("जैसे: 2000") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth().testTag("advance_amount_input"),
+                    shape = RoundedCornerShape(14.dp),
                     colors = outlinedFieldColors()
                 )
 
@@ -234,6 +244,7 @@ fun AddAdvanceDialog(
                     label = { Text("कारण / विवरण") },
                     placeholder = { Text("जैसे: घर के लिए, दवाई, किराना...") },
                     modifier = Modifier.fillMaxWidth().testTag("advance_reason_input"),
+                    shape = RoundedCornerShape(14.dp),
                     colors = outlinedFieldColors()
                 )
 
@@ -245,9 +256,10 @@ fun AddAdvanceDialog(
                 ) {
                     OutlinedButton(
                         onClick = onDismiss,
-                        shape = RoundedCornerShape(12.dp)
+                        shape = RoundedCornerShape(14.dp),
+                        border = BorderStroke(1.dp, Color(0x330F172A))
                     ) {
-                        Text("रद्द करें", color = TextSecondary)
+                        Text("रद्द करें", color = TextSecondary, fontWeight = FontWeight.SemiBold)
                     }
                     Spacer(modifier = Modifier.width(12.dp))
                     Button(
@@ -258,7 +270,7 @@ fun AddAdvanceDialog(
                             }
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = AccentIndigo),
-                        shape = RoundedCornerShape(12.dp),
+                        shape = RoundedCornerShape(14.dp),
                         modifier = Modifier.testTag("save_advance_button")
                     ) {
                         Text("💾 जोड़ें", color = Color.White, fontWeight = FontWeight.Bold)
@@ -279,9 +291,10 @@ fun ConfirmActionDialog(
 ) {
     Dialog(onDismissRequest = onDismiss) {
         Card(
-            shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(containerColor = SurfaceDark),
-            border = androidx.compose.foundation.BorderStroke(1.dp, GlassBorder)
+            shape = RoundedCornerShape(28.dp),
+            colors = CardDefaults.cardColors(containerColor = LiquidGlassCardHigh),
+            border = BorderStroke(1.2.dp, Color.White),
+            modifier = Modifier.shadow(16.dp, RoundedCornerShape(28.dp), spotColor = Color(0x24312E81))
         ) {
             Column(
                 modifier = Modifier
@@ -308,15 +321,16 @@ fun ConfirmActionDialog(
                 ) {
                     OutlinedButton(
                         onClick = onDismiss,
-                        shape = RoundedCornerShape(12.dp)
+                        shape = RoundedCornerShape(14.dp),
+                        border = BorderStroke(1.dp, Color(0x330F172A))
                     ) {
-                        Text("रद्द करें", color = TextSecondary)
+                        Text("रद्द करें", color = TextSecondary, fontWeight = FontWeight.SemiBold)
                     }
                     Spacer(modifier = Modifier.width(12.dp))
                     Button(
                         onClick = onConfirm,
                         colors = ButtonDefaults.buttonColors(containerColor = StatusRed),
-                        shape = RoundedCornerShape(12.dp),
+                        shape = RoundedCornerShape(14.dp),
                         modifier = Modifier.testTag("confirm_delete_button")
                     ) {
                         Text(confirmText, color = Color.White, fontWeight = FontWeight.Bold)
@@ -330,10 +344,12 @@ fun ConfirmActionDialog(
 @Composable
 fun outlinedFieldColors() = OutlinedTextFieldDefaults.colors(
     focusedBorderColor = AccentIndigo,
-    unfocusedBorderColor = GlassBorder,
+    unfocusedBorderColor = Color(0x2B0F172A),
     focusedLabelColor = AccentIndigo,
     unfocusedLabelColor = TextSecondary,
     focusedTextColor = TextPrimary,
     unfocusedTextColor = TextPrimary,
-    cursorColor = AccentIndigo
+    cursorColor = AccentIndigo,
+    focusedContainerColor = Color(0x66FFFFFF),
+    unfocusedContainerColor = Color(0x40FFFFFF)
 )

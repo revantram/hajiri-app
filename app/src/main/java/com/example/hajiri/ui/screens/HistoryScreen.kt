@@ -26,16 +26,23 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.hajiri.model.AttendanceStatus
 import com.example.hajiri.ui.components.GlassCard
 import com.example.hajiri.ui.theme.AccentIndigo
-import com.example.hajiri.ui.theme.GlassBorder
-import com.example.hajiri.ui.theme.GlassCard
+import com.example.hajiri.ui.theme.StatusBlue
+import com.example.hajiri.ui.theme.StatusBlueBg
+import com.example.hajiri.ui.theme.StatusGreen
+import com.example.hajiri.ui.theme.StatusGreenBg
+import com.example.hajiri.ui.theme.StatusRed
+import com.example.hajiri.ui.theme.StatusRedBg
+import com.example.hajiri.ui.theme.StatusYellow
+import com.example.hajiri.ui.theme.StatusYellowBg
 import com.example.hajiri.ui.theme.TextMuted
 import com.example.hajiri.ui.theme.TextPrimary
 import com.example.hajiri.ui.theme.TextSecondary
@@ -100,16 +107,18 @@ fun HistoryScreen(
 
                     Surface(
                         shape = RoundedCornerShape(50),
-                        color = if (isSelected) AccentIndigo else GlassCard,
-                        border = BorderStroke(1.dp, if (isSelected) AccentIndigo else GlassBorder),
-                        modifier = Modifier.clickable { viewModel.setHistoryMonth(mKey) }
+                        color = if (isSelected) AccentIndigo else Color.White,
+                        border = BorderStroke(1.dp, if (isSelected) AccentIndigo else Color(0xFFE2E8F0)),
+                        modifier = Modifier
+                            .shadow(if (isSelected) 6.dp else 2.dp, RoundedCornerShape(50), spotColor = Color(0x1F312E81))
+                            .clickable { viewModel.setHistoryMonth(mKey) }
                     ) {
                         Text(
                             text = label,
                             fontSize = 12.sp,
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                             color = if (isSelected) Color.White else TextSecondary,
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp)
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
                         )
                     }
                 }
@@ -136,6 +145,13 @@ fun HistoryScreen(
                 val date = DateUtils.parseDateKey(entry.key)
                 val ot = otHours[entry.key]
 
+                val (dotCol, bgCol, textCol) = when (entry.value.status) {
+                    AttendanceStatus.PRESENT -> Triple(StatusGreen, StatusGreenBg, StatusGreen)
+                    AttendanceStatus.ABSENT -> Triple(StatusRed, StatusRedBg, StatusRed)
+                    AttendanceStatus.HALF -> Triple(StatusYellow, StatusYellowBg, StatusYellow)
+                    AttendanceStatus.LEAVE -> Triple(StatusBlue, StatusBlueBg, StatusBlue)
+                }
+
                 GlassCard(
                     modifier = Modifier.clickable {
                         viewModel.toggleCalendarDay(entry.key)
@@ -148,14 +164,14 @@ fun HistoryScreen(
                         Box(
                             modifier = Modifier
                                 .size(10.dp)
-                                .background(Color(entry.value.status.dotColorHex), CircleShape)
+                                .background(dotCol, CircleShape)
                         )
                         Spacer(modifier = Modifier.width(12.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = if (date != null) DateUtils.formatHindiDate(date) else entry.key,
                                 fontSize = 14.sp,
-                                fontWeight = FontWeight.SemiBold,
+                                fontWeight = FontWeight.Bold,
                                 color = TextPrimary
                             )
                             val dayText = if (date != null) {
@@ -165,25 +181,25 @@ fun HistoryScreen(
                             Text(
                                 text = dayText,
                                 fontSize = 11.sp,
-                                color = TextMuted
+                                color = TextSecondary
                             )
                             if (entry.value.note.isNotBlank()) {
                                 Text(
                                     text = "📝 ${entry.value.note}",
                                     fontSize = 11.sp,
                                     fontStyle = FontStyle.Italic,
-                                    color = TextSecondary
+                                    color = TextMuted
                                 )
                             }
                         }
 
                         Surface(
                             shape = RoundedCornerShape(50),
-                            color = Color(entry.value.status.dotColorHex).copy(alpha = 0.15f)
+                            color = bgCol
                         ) {
                             Text(
                                 text = entry.value.status.labelHindi,
-                                color = Color(entry.value.status.dotColorHex),
+                                color = textCol,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
@@ -195,7 +211,7 @@ fun HistoryScreen(
         }
 
         item {
-            Spacer(modifier = Modifier.height(80.dp))
+            Spacer(modifier = Modifier.height(90.dp))
         }
     }
 }

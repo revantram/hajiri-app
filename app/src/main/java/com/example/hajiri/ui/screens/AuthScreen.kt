@@ -1,6 +1,5 @@
 package com.example.hajiri.ui.screens
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -32,6 +31,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -44,8 +44,6 @@ import androidx.compose.ui.unit.sp
 import com.example.hajiri.ui.components.GlassCard
 import com.example.hajiri.ui.components.outlinedFieldColors
 import com.example.hajiri.ui.theme.AccentIndigo
-import com.example.hajiri.ui.theme.DarkBackground
-import com.example.hajiri.ui.theme.GlassBorder
 import com.example.hajiri.ui.theme.StatusGreen
 import com.example.hajiri.ui.theme.StatusRed
 import com.example.hajiri.ui.theme.StatusYellow
@@ -69,7 +67,7 @@ fun AuthScreen(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(DarkBackground.copy(alpha = 0.96f))
+            .background(Color(0x73000000))
             .padding(20.dp),
         contentAlignment = Alignment.Center
     ) {
@@ -90,9 +88,9 @@ fun AuthScreen(
                     color = TextPrimary
                 )
                 Text(
-                    text = "मोबाइल नंबर से Login करें — डेटा हमेशा सुरक्षित रहेगा",
+                    text = "मोबाइल नंबर से Login करें — डेटा सुरक्षित रहेगा",
                     fontSize = 12.sp,
-                    color = TextMuted,
+                    color = TextSecondary,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.padding(top = 4.dp, bottom = 12.dp)
                 )
@@ -105,12 +103,13 @@ fun AuthScreen(
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(7.dp)
+                            .size(8.dp)
                             .background(if (currentUser != null) StatusGreen else StatusYellow, CircleShape)
                     )
                     Text(
-                        text = if (currentUser != null) "लॉगिन किया हुआ है" else "लोकल स्टोरेज तैयार — Login करें",
-                        fontSize = 11.sp,
+                        text = if (currentUser != null) "लॉगिन है" else "लोकल स्टोरेज तैयार — Login करें",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
                         color = if (currentUser != null) StatusGreen else StatusYellow
                     )
                 }
@@ -118,7 +117,7 @@ fun AuthScreen(
                 if (currentUser != null) {
                     Text(
                         text = "वर्तमान यूजर: ${currentUser?.name ?: ""} (${currentUser?.phone ?: ""})",
-                        fontSize = 14.sp,
+                        fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
                         color = TextPrimary,
                         modifier = Modifier.padding(bottom = 16.dp)
@@ -136,14 +135,14 @@ fun AuthScreen(
                     Spacer(modifier = Modifier.height(12.dp))
 
                     TextButton(onClick = { viewModel.showAuth(false) }) {
-                        Text("बंद करें", color = TextSecondary)
+                        Text("बंद करें", color = TextSecondary, fontWeight = FontWeight.Bold)
                     }
                 } else {
-                    // Tab Selector
+                    // Segmented Tab Selector
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .background(Color.White.copy(alpha = 0.05f), RoundedCornerShape(12.dp))
+                            .background(Color(0xFFE2E8F0), RoundedCornerShape(12.dp))
                             .padding(4.dp)
                     ) {
                         TabButton(
@@ -160,7 +159,7 @@ fun AuthScreen(
                         )
                     }
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(18.dp))
 
                     if (isRegisterTab) {
                         OutlinedTextField(
@@ -169,9 +168,10 @@ fun AuthScreen(
                             label = { Text("आपका नाम") },
                             placeholder = { Text("जैसे: Ramesh Kumar") },
                             modifier = Modifier.fillMaxWidth().testTag("reg_name_input"),
+                            shape = RoundedCornerShape(14.dp),
                             colors = outlinedFieldColors()
                         )
-                        Spacer(modifier = Modifier.height(10.dp))
+                        Spacer(modifier = Modifier.height(12.dp))
                     }
 
                     OutlinedTextField(
@@ -181,10 +181,11 @@ fun AuthScreen(
                         placeholder = { Text("10 अंक का नंबर") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
                         modifier = Modifier.fillMaxWidth().testTag("auth_phone_input"),
+                        shape = RoundedCornerShape(14.dp),
                         colors = outlinedFieldColors()
                     )
 
-                    Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
 
                     OutlinedTextField(
                         value = pinText,
@@ -194,10 +195,11 @@ fun AuthScreen(
                         visualTransformation = PasswordVisualTransformation(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
                         modifier = Modifier.fillMaxWidth().testTag("auth_pin_input"),
+                        shape = RoundedCornerShape(14.dp),
                         colors = outlinedFieldColors()
                     )
 
-                    Spacer(modifier = Modifier.height(18.dp))
+                    Spacer(modifier = Modifier.height(20.dp))
 
                     Button(
                         onClick = {
@@ -227,8 +229,9 @@ fun AuthScreen(
                     Text(
                         text = "🔌 बिना Login के उपयोग करें (डेटा सिर्फ इस फोन में)",
                         fontSize = 12.sp,
-                        color = TextMuted,
+                        color = AccentIndigo,
                         textDecoration = TextDecoration.Underline,
+                        fontWeight = FontWeight.SemiBold,
                         modifier = Modifier
                             .clickable { viewModel.continueOffline() }
                             .padding(8.dp)
@@ -249,14 +252,19 @@ fun TabButton(
 ) {
     Surface(
         shape = RoundedCornerShape(9.dp),
-        color = if (isSelected) AccentIndigo else Color.Transparent,
-        modifier = modifier.clickable(onClick = onClick)
+        color = if (isSelected) Color.White else Color.Transparent,
+        modifier = modifier
+            .then(
+                if (isSelected) Modifier.shadow(2.dp, RoundedCornerShape(9.dp), spotColor = Color(0x1F000000))
+                else Modifier
+            )
+            .clickable(onClick = onClick)
     ) {
         Text(
             text = title,
-            color = if (isSelected) Color.White else TextSecondary,
+            color = if (isSelected) TextPrimary else TextMuted,
             fontSize = 13.sp,
-            fontWeight = FontWeight.Bold,
+            fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Medium,
             textAlign = TextAlign.Center,
             modifier = Modifier.padding(vertical = 9.dp)
         )

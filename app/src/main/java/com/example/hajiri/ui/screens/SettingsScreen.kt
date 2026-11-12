@@ -33,9 +33,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.hajiri.ui.components.GlassCard
 import com.example.hajiri.ui.theme.AccentIndigo
-import com.example.hajiri.ui.theme.AdvancePink
-import com.example.hajiri.ui.theme.StatusGreen
+import com.example.hajiri.ui.theme.AdvancePinkBg
+import com.example.hajiri.ui.theme.StatusGreenBg
 import com.example.hajiri.ui.theme.StatusRed
+import com.example.hajiri.ui.theme.StatusRedBg
 import com.example.hajiri.ui.theme.TextMuted
 import com.example.hajiri.ui.theme.TextPrimary
 import com.example.hajiri.ui.theme.TextSecondary
@@ -73,12 +74,12 @@ fun SettingsScreen(
             )
         }
 
-        // Settings group
+        // Settings group (Apple Settings Group style)
         GlassCard(contentPadding = 0.dp) {
             Column {
                 SettingsOptionRow(
                     iconText = "💰",
-                    iconBg = AccentIndigo.copy(alpha = 0.18f),
+                    iconBg = AccentIndigo.copy(alpha = 0.12f),
                     title = "तनख्वाह सेटिंग",
                     subtitle = "मासिक तनख्वाह, OT दर",
                     valueText = if (settings.salary > 0) "₹${DateUtils.formatInr(settings.salary)}" else "—",
@@ -86,11 +87,11 @@ fun SettingsScreen(
                     modifier = Modifier.testTag("open_salary_settings_btn")
                 )
 
-                HorizontalDivider(color = Color.White.copy(alpha = 0.05f))
+                HorizontalDivider(color = Color(0xFFF1F5F9))
 
                 SettingsOptionRow(
                     iconText = "📅",
-                    iconBg = StatusGreen.copy(alpha = 0.18f),
+                    iconBg = StatusGreenBg,
                     title = "काम के दिन",
                     subtitle = "महीने में कुल कार्यदिवस",
                     valueText = "${settings.workDays} दिन",
@@ -98,11 +99,11 @@ fun SettingsScreen(
                     modifier = Modifier.testTag("open_workdays_settings_btn")
                 )
 
-                HorizontalDivider(color = Color.White.copy(alpha = 0.05f))
+                HorizontalDivider(color = Color(0xFFF1F5F9))
 
                 SettingsOptionRow(
                     iconText = "🔄",
-                    iconBg = AdvancePink.copy(alpha = 0.18f),
+                    iconBg = AdvancePinkBg,
                     title = if (currentUser != null) "Account Switch / Logout" else "अकाउंट लॉगिन / रजिस्टर",
                     subtitle = currentUser?.name ?: "वर्तमान में ऑफलाइन मोड",
                     valueText = if (currentUser != null) "लॉगिन है" else "ऑफलाइन",
@@ -118,15 +119,15 @@ fun SettingsScreen(
                 text = "⚠️ खतरनाक ज़ोन",
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
-                color = TextMuted,
+                color = TextSecondary,
                 letterSpacing = 0.8.sp
             )
 
             Button(
                 onClick = { viewModel.showClearMonthDialog.value = true },
-                colors = ButtonDefaults.buttonColors(containerColor = StatusRed.copy(alpha = 0.14f)),
+                colors = ButtonDefaults.buttonColors(containerColor = StatusRedBg),
                 border = BorderStroke(1.dp, StatusRed.copy(alpha = 0.3f)),
-                shape = RoundedCornerShape(13.dp),
+                shape = RoundedCornerShape(14.dp),
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(50.dp)
@@ -142,9 +143,9 @@ fun SettingsScreen(
 
             Button(
                 onClick = { viewModel.showClearAllDialog.value = true },
-                colors = ButtonDefaults.buttonColors(containerColor = StatusRed.copy(alpha = 0.14f)),
+                colors = ButtonDefaults.buttonColors(containerColor = StatusRedBg),
                 border = BorderStroke(1.dp, StatusRed.copy(alpha = 0.3f)),
-                shape = RoundedCornerShape(13.dp),
+                shape = RoundedCornerShape(14.dp),
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(50.dp)
@@ -159,7 +160,7 @@ fun SettingsScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(80.dp))
+        Spacer(modifier = Modifier.height(90.dp))
     }
 }
 
@@ -187,23 +188,23 @@ fun SettingsOptionRow(
         ) {
             Box(
                 modifier = Modifier
-                    .size(36.dp)
-                    .background(iconBg, RoundedCornerShape(10.dp)),
+                    .size(40.dp)
+                    .background(iconBg, RoundedCornerShape(12.dp)),
                 contentAlignment = Alignment.Center
             ) {
-                Text(text = iconText, fontSize = 18.sp)
+                Text(text = iconText, fontSize = 20.sp)
             }
-            Spacer(modifier = Modifier.width(12.dp))
+            Spacer(modifier = Modifier.width(14.dp))
             Column {
-                Text(text = title, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
-                Text(text = subtitle, fontSize = 11.sp, color = TextMuted)
+                Text(text = title, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                Text(text = subtitle, fontSize = 12.sp, color = TextMuted)
             }
         }
 
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(text = valueText, fontSize = 13.sp, color = TextSecondary)
+            Text(text = valueText, fontSize = 13.sp, color = TextSecondary, fontWeight = FontWeight.Medium)
             Spacer(modifier = Modifier.width(6.dp))
-            Text(text = "›", fontSize = 18.sp, color = TextMuted)
+            Text(text = "›", fontSize = 20.sp, color = TextMuted)
         }
     }
 }
