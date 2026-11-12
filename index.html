@@ -1,0 +1,1822 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
+  <title>हाजिरी ऐप</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"/>
+
+  <!-- Firebase SDK -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import { getFirestore, doc, setDoc, getDoc, collection, onSnapshot, query, where, deleteDoc }
+      from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+    // ══════════════════════════════════════════════
+    // 🔧 Firebase Config — यहाँ अपना config डालें
+    // ══════════════════════════════════════════════
+    const firebaseConfig = {
+      apiKey: "AIzaSyDEMO_REPLACE_WITH_YOUR_KEY",
+      authDomain: "hajiri-app.firebaseapp.com",
+      projectId: "hajiri-app-REPLACE",
+      storageBucket: "hajiri-app.appspot.com",
+      messagingSenderId: "000000000000",
+      appId: "1:000000000000:web:REPLACE"
+    };
+
+    let db = null;
+    let firebaseReady = false;
+    let currentUserId = null;
+    let unsubscribers = [];
+
+    try {
+      const app = initializeApp(firebaseConfig);
+      db = getFirestore(app);
+      firebaseReady = true;
+    } catch(e) {
+      console.warn("Firebase init failed, offline mode:", e.message);
+    }
+
+    // Expose to global scope
+    window._firebase = {
+      isReady: () => firebaseReady && db !== null,
+      setUser: (uid) => { currentUserId = uid; },
+      getUser: () => currentUserId,
+
+      // Save attendance record
+      saveAttendance: async (dateKey, status, note='') => {
+        if (!firebaseReady || !currentUserId) return false;
+        try {
+          await setDoc(doc(db, 'users', currentUserId, 'attendance', dateKey), {
+            status, note, updatedAt: Date.now()
+          });
+          return true;
+        } catch(e) { console.warn('Save error:', e); return false; }
+      },
+
+      deleteAttendance: async (dateKey) => {
+        if (!firebaseReady || !currentUserId) return false;
+        try {
+          await deleteDoc(doc(db, 'users', currentUserId, 'attendance', dateKey));
+          return true;
+        } catch(e) { return false; }
+      },
+
+      // Save OT
+      saveOT: async (dateKey, hours) => {
+        if (!firebaseReady || !currentUserId) return false;
+        try {
+          await setDoc(doc(db, 'users', currentUserId, 'ot', dateKey), {
+            hours, updatedAt: Date.now()
+          });
+          return true;
+        } catch(e) { return false; }
+      },
+
+      // Save settings
+      saveSettings: async (settings) => {
+        if (!firebaseReady || !currentUserId) return false;
+        try {
+          await setDoc(doc(db, 'users', currentUserId, 'meta', 'settings'), settings);
+          return true;
+        } catch(e) { return false; }
+      },
+
+      // Save advance
+      saveAdvance: async (id, data) => {
+        if (!firebaseReady || !currentUserId) return false;
+        try {
+          await setDoc(doc(db, 'users', currentUserId, 'advances', id), data);
+          return true;
+        } catch(e) { return false; }
+      },
+
+      deleteAdvance: async (id) => {
+        if (!firebaseReady || !currentUserId) return false;
+        try {
+          await deleteDoc(doc(db, 'users', currentUserId, 'advances', id));
+          return true;
+        } catch(e) { return false; }
+      },
+
+      // Listen for real-time updates
+      listenAll: (onUpdate) => {
+        // Clear previous listeners
+        unsubscribers.forEach(u => u());
+        unsubscribers = [];
+
+        if (!firebaseReady || !currentUserId) return;
+
+        const attRef = collection(db, 'users', currentUserId, 'attendance');
+        const u1 = onSnapshot(attRef, snap => {
+          const att = {};
+          snap.forEach(d => { att[d.id] = d.data(); });
+          window._localCache.attendance = att;
+          onUpdate('attendance');
+        });
+
+        const otRef = collection(db, 'users', currentUserId, 'ot');
+        const u2 = onSnapshot(otRef, snap => {
+          const ot = {};
+          snap.forEach(d => { ot[d.id] = d.data(); });
+          window._localCache.ot = ot;
+          onUpdate('ot');
+        });
+
+        const settRef = doc(db, 'users', currentUserId, 'meta', 'settings');
+        const u3 = onSnapshot(settRef, snap => {
+          if (snap.exists()) {
+            window._localCache.settings = snap.data();
+            onUpdate('settings');
+          }
+        });
+
+        const advRef = collection(db, 'users', currentUserId, 'advances');
+        const u4 = onSnapshot(advRef, snap => {
+          const adv = {};
+          snap.forEach(d => { adv[d.id] = d.data(); });
+          window._localCache.advances = adv;
+          onUpdate('advances');
+        });
+
+        unsubscribers = [u1, u2, u3, u4];
+      },
+
+      stopListening: () => {
+        unsubscribers.forEach(u => u());
+        unsubscribers = [];
+      },
+
+      // Verify user PIN
+      verifyUser: async (phone, pin) => {
+        if (!firebaseReady) return null;
+        try {
+          const ref = doc(db, 'users', phone, 'meta', 'auth');
+          const snap = await getDoc(ref);
+          if (!snap.exists()) return null;
+          return snap.data().pin === pin ? snap.data() : null;
+        } catch(e) { return null; }
+      },
+
+      // Register user
+      registerUser: async (phone, pin, name) => {
+        if (!firebaseReady) return false;
+        try {
+          await setDoc(doc(db, 'users', phone, 'meta', 'auth'), {
+            phone, pin, name, createdAt: Date.now()
+          });
+          return true;
+        } catch(e) { return false; }
+      }
+    };
+  </script>
+
+  <style>
+    :root {
+      --bg1: #07071a;
+      --glass: rgba(255,255,255,0.07);
+      --glass-b: rgba(255,255,255,0.14);
+      --glass-h: rgba(255,255,255,0.11);
+      --accent: #6366f1;
+      --accent2: #8b5cf6;
+      --green: #22c55e;
+      --red: #ef4444;
+      --yellow: #f59e0b;
+      --blue: #3b82f6;
+      --orange: #f97316;
+      --pink: #ec4899;
+      --text: rgba(255,255,255,0.95);
+      --text2: rgba(255,255,255,0.58);
+      --text3: rgba(255,255,255,0.3);
+      --r: 20px;
+      --rs: 14px;
+    }
+
+    *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+
+    body{
+      font-family:'Inter',-apple-system,sans-serif;
+      background:var(--bg1);color:var(--text);
+      min-height:100vh;overflow-x:hidden;
+    }
+
+    /* ─── Orb background ─── */
+    .orbs{position:fixed;inset:0;overflow:hidden;z-index:0;pointer-events:none;}
+    .orb{position:absolute;border-radius:50%;filter:blur(90px);opacity:.22;animation:orb 10s ease-in-out infinite;}
+    .o1{width:420px;height:420px;background:#6366f1;top:-120px;left:-120px;animation-delay:0s;}
+    .o2{width:320px;height:320px;background:#8b5cf6;bottom:-80px;right:-80px;animation-delay:-4s;}
+    .o3{width:220px;height:220px;background:#3b82f6;top:45%;left:55%;animation-delay:-7s;}
+    .o4{width:160px;height:160px;background:#22c55e;top:65%;left:5%;animation-delay:-2s;}
+    .o5{width:180px;height:180px;background:#ec4899;top:20%;right:5%;animation-delay:-5s;}
+    @keyframes orb{0%,100%{transform:translate(0,0)scale(1);}40%{transform:translate(25px,-18px)scale(1.06);}70%{transform:translate(-18px,25px)scale(.94);}}
+
+    /* ─── App Shell ─── */
+    #app{position:relative;z-index:1;max-width:480px;margin:0 auto;min-height:100vh;padding-bottom:92px;}
+
+    /* ─── Login Screen ─── */
+    #login-screen{
+      position:fixed;inset:0;z-index:900;
+      display:flex;align-items:center;justify-content:center;
+      background:rgba(7,7,26,0.96);backdrop-filter:blur(30px);
+    }
+    .login-box{
+      width:92%;max-width:380px;
+      background:linear-gradient(135deg,rgba(255,255,255,0.09),rgba(255,255,255,0.03));
+      border:1px solid var(--glass-b);border-radius:28px;
+      padding:36px 28px;backdrop-filter:blur(20px);
+      box-shadow:0 20px 60px rgba(0,0,0,0.6);
+    }
+    .login-logo{font-size:48px;text-align:center;margin-bottom:6px;}
+    .login-title{font-size:26px;font-weight:800;text-align:center;margin-bottom:4px;}
+    .login-title span{background:linear-gradient(135deg,#6366f1,#8b5cf6,#c084fc);-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+    .login-sub{font-size:13px;color:var(--text3);text-align:center;margin-bottom:28px;}
+    .login-tabs{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:22px;background:rgba(255,255,255,0.05);border-radius:12px;padding:4px;}
+    .login-tab{padding:9px;border:none;border-radius:9px;background:none;color:var(--text2);font-size:13px;font-weight:600;cursor:pointer;transition:all .2s;}
+    .login-tab.active{background:var(--accent);color:white;}
+    .l-field{margin-bottom:14px;}
+    .l-label{font-size:11px;font-weight:600;color:var(--text3);margin-bottom:5px;text-transform:uppercase;letter-spacing:.6px;}
+    .l-input{
+      width:100%;background:rgba(255,255,255,0.08);border:1px solid var(--glass-b);
+      border-radius:12px;padding:13px 14px;color:var(--text);font-size:16px;
+      font-family:inherit;outline:none;transition:all .2s;
+    }
+    .l-input:focus{border-color:var(--accent);background:rgba(99,102,241,0.12);}
+    .l-btn{
+      width:100%;background:linear-gradient(135deg,#6366f1,#8b5cf6);
+      border:none;border-radius:14px;padding:15px;color:white;font-size:16px;
+      font-weight:700;cursor:pointer;margin-top:6px;
+      box-shadow:0 8px 25px rgba(99,102,241,.45);transition:all .2s;
+    }
+    .l-btn:active{transform:scale(.97);}
+    .l-offline{
+      text-align:center;margin-top:16px;font-size:12px;color:var(--text3);
+      cursor:pointer;text-decoration:underline;padding:6px;
+    }
+    .l-sync-badge{
+      display:flex;align-items:center;gap:6px;justify-content:center;
+      font-size:11px;color:var(--green);margin-bottom:20px;
+    }
+    .sync-dot{width:7px;height:7px;border-radius:50%;background:var(--green);animation:pulse 2s infinite;}
+    @keyframes pulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:.5;transform:scale(1.4);}}
+    .offline-dot{background:var(--yellow);}
+
+    /* ─── Header ─── */
+    .hdr{
+      padding:52px 20px 16px;
+      background:linear-gradient(180deg,rgba(7,7,26,.92) 0%,transparent 100%);
+      position:sticky;top:0;z-index:100;backdrop-filter:blur(20px);
+    }
+    .hdr-top{display:flex;justify-content:space-between;align-items:center;}
+    .hdr-title{font-size:26px;font-weight:800;letter-spacing:-.5px;}
+    .hdr-title span{background:linear-gradient(135deg,#6366f1,#8b5cf6,#c084fc);-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+    .hdr-right{display:flex;align-items:center;gap:8px;}
+    .user-chip{
+      background:var(--glass);border:1px solid var(--glass-b);
+      border-radius:50px;padding:5px 10px;font-size:11px;
+      color:var(--text2);display:flex;align-items:center;gap:5px;cursor:pointer;
+    }
+    .sync-indicator{width:7px;height:7px;border-radius:50%;}
+    .sync-on{background:var(--green);animation:pulse 2s infinite;}
+    .sync-off{background:var(--yellow);}
+    .date-chip{
+      background:var(--glass);border:1px solid var(--glass-b);
+      border-radius:50px;padding:5px 12px;font-size:11px;color:var(--text2);
+    }
+
+    /* ─── Glass Card ─── */
+    .gc{
+      background:var(--glass);border:1px solid var(--glass-b);
+      border-radius:var(--r);backdrop-filter:blur(20px);
+      box-shadow:0 8px 32px rgba(0,0,0,.35);overflow:hidden;
+      position:relative;
+    }
+    .gc::before{
+      content:'';position:absolute;inset:0;border-radius:inherit;
+      background:linear-gradient(135deg,rgba(255,255,255,0.07) 0%,transparent 60%);
+      pointer-events:none;
+    }
+
+    /* ─── Pages ─── */
+    .pg{display:none;}
+    .pg.on{display:block;animation:fadeUp .28s ease;}
+    @keyframes fadeUp{from{opacity:0;transform:translateY(12px);}to{opacity:1;transform:translateY(0);}}
+
+    /* ─── Today Card ─── */
+    .today-gc{margin:0 16px 14px;padding:22px 24px;}
+    .today-gc::after{
+      content:'';position:absolute;inset:0;
+      background:linear-gradient(135deg,rgba(99,102,241,.22),rgba(139,92,246,.1));
+      pointer-events:none;border-radius:inherit;
+    }
+    .t-label{font-size:11px;color:var(--text3);font-weight:600;letter-spacing:.6px;margin-bottom:5px;}
+    .t-date{font-size:20px;font-weight:700;margin-bottom:18px;}
+    .mark-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px;}
+    .mb{
+      padding:13px 8px;border:none;border-radius:13px;
+      font-size:13px;font-weight:700;cursor:pointer;
+      display:flex;align-items:center;justify-content:center;gap:7px;
+      position:relative;overflow:hidden;transition:all .2s cubic-bezier(.34,1.56,.64,1);
+      color:white;
+    }
+    .mb::after{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,255,255,.18),transparent);}
+    .mb:active{transform:scale(.95);}
+    .mb.sel{transform:scale(1.04);box-shadow:0 0 0 2px white !important;}
+    .mb.sel::before{content:'✓';position:absolute;top:5px;right:7px;font-size:10px;opacity:.85;}
+    .bp{background:linear-gradient(135deg,#22c55e,#16a34a);box-shadow:0 4px 18px rgba(34,197,94,.4);}
+    .ba{background:linear-gradient(135deg,#ef4444,#dc2626);box-shadow:0 4px 18px rgba(239,68,68,.4);}
+    .bh{background:linear-gradient(135deg,#f59e0b,#d97706);box-shadow:0 4px 18px rgba(245,158,11,.4);}
+    .bl{background:linear-gradient(135deg,#3b82f6,#2563eb);box-shadow:0 4px 18px rgba(59,130,246,.4);}
+    .status-pill{
+      display:inline-flex;align-items:center;gap:7px;
+      padding:7px 14px;border-radius:50px;font-size:12px;font-weight:700;margin-top:12px;
+    }
+    .sdot{width:8px;height:8px;border-radius:50%;animation:pulse 2s infinite;}
+
+    /* ─── Stats Row ─── */
+    .stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin:0 16px 14px;}
+    .sc{
+      padding:14px 8px;text-align:center;border-radius:15px;
+      background:var(--glass);border:1px solid var(--glass-b);
+      position:relative;overflow:hidden;cursor:pointer;transition:transform .15s;
+    }
+    .sc:active{transform:scale(.94);}
+    .sc::before{content:'';position:absolute;top:0;left:0;right:0;height:2.5px;border-radius:50px 50px 0 0;}
+    .sp::before{background:var(--green);}
+    .sa::before{background:var(--red);}
+    .sh::before{background:var(--yellow);}
+    .sl::before{background:var(--blue);}
+    .sc-num{font-size:22px;font-weight:800;line-height:1;}
+    .sc-lbl{font-size:9px;color:var(--text2);margin-top:4px;font-weight:600;}
+    .sp .sc-num{color:var(--green);}
+    .sa .sc-num{color:var(--red);}
+    .sh .sc-num{color:var(--yellow);}
+    .sl .sc-num{color:var(--blue);}
+
+    /* ─── Streak Banner ─── */
+    .streak-banner{
+      margin:0 16px 14px;padding:14px 20px;
+      display:flex;align-items:center;justify-content:space-between;
+    }
+    .streak-left{display:flex;align-items:center;gap:12px;}
+    .streak-fire{font-size:32px;animation:fire .8s ease-in-out infinite alternate;}
+    @keyframes fire{from{transform:scale(1) rotate(-3deg);}to{transform:scale(1.08) rotate(3deg);}}
+    .streak-num{font-size:28px;font-weight:900;color:var(--orange);}
+    .streak-label{font-size:12px;color:var(--text2);}
+    .streak-best{text-align:right;}
+    .streak-best-num{font-size:18px;font-weight:800;color:var(--yellow);}
+    .streak-best-lbl{font-size:10px;color:var(--text3);}
+
+    /* ─── Salary Card ─── */
+    .salary-gc{margin:0 16px 14px;padding:20px 22px;}
+    .sal-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;}
+    .sal-lbl{font-size:12px;color:var(--text2);font-weight:500;}
+    .edit-btn{
+      background:rgba(99,102,241,.18);border:1px solid rgba(99,102,241,.3);
+      color:#818cf8;padding:5px 12px;border-radius:50px;font-size:11px;
+      cursor:pointer;font-weight:700;
+    }
+    .sal-amt{font-size:34px;font-weight:900;letter-spacing:-1px;}
+    .sal-amt span{background:linear-gradient(135deg,#22c55e,#4ade80);-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+    .sal-break{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:14px;}
+    .sb-item{text-align:center;}
+    .sb-val{font-size:13px;font-weight:800;}
+    .sb-key{font-size:9px;color:var(--text3);margin-top:2px;}
+    .prog{margin-top:14px;height:5px;background:rgba(255,255,255,.08);border-radius:50px;overflow:hidden;}
+    .prog-bar{height:100%;background:linear-gradient(90deg,#22c55e,#4ade80);border-radius:50px;transition:width .9s cubic-bezier(.34,1.56,.64,1);}
+
+    /* ─── OT Card ─── */
+    .ot-gc{margin:0 16px 14px;padding:18px 22px;}
+    .ot-top{display:flex;justify-content:space-between;align-items:center;}
+    .ot-total{font-size:22px;font-weight:800;color:var(--orange);}
+    .ot-row{display:flex;gap:9px;align-items:center;margin-top:12px;}
+    .ot-in{
+      flex:1;background:rgba(255,255,255,.07);border:1px solid var(--glass-b);
+      border-radius:11px;padding:10px 13px;color:var(--text);font-size:15px;
+      font-family:inherit;outline:none;transition:all .2s;
+    }
+    .ot-in:focus{border-color:var(--orange);background:rgba(249,115,22,.1);}
+    .ot-add{
+      background:linear-gradient(135deg,#f97316,#ea580c);border:none;
+      border-radius:11px;padding:10px 16px;color:white;font-weight:700;
+      font-size:13px;cursor:pointer;box-shadow:0 4px 14px rgba(249,115,22,.4);
+    }
+    .ot-add:active{transform:scale(.95);}
+
+    /* ─── Advance/Loan Card ─── */
+    .adv-gc{margin:0 16px 14px;padding:18px 22px;}
+    .adv-total-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;}
+    .adv-total{font-size:22px;font-weight:800;color:var(--pink);}
+    .adv-add-btn{
+      background:linear-gradient(135deg,#ec4899,#db2777);border:none;
+      border-radius:11px;padding:8px 14px;color:white;font-size:12px;
+      font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(236,72,153,.35);
+    }
+    .adv-add-btn:active{transform:scale(.95);}
+    .adv-list{display:flex;flex-direction:column;gap:7px;}
+    .adv-item{
+      display:flex;align-items:center;justify-content:space-between;
+      background:rgba(236,72,153,.08);border:1px solid rgba(236,72,153,.18);
+      border-radius:11px;padding:10px 14px;
+    }
+    .adv-item-left{flex:1;}
+    .adv-item-reason{font-size:13px;font-weight:600;}
+    .adv-item-date{font-size:10px;color:var(--text3);margin-top:1px;}
+    .adv-item-amt{font-size:15px;font-weight:800;color:var(--pink);}
+    .adv-del{background:none;border:none;color:var(--red);cursor:pointer;font-size:17px;padding:4px 6px;}
+
+    /* ─── Notes per day ─── */
+    .note-row{margin-top:14px;}
+    .note-in{
+      width:100%;background:rgba(255,255,255,.06);border:1px solid var(--glass-b);
+      border-radius:11px;padding:10px 13px;color:var(--text);font-size:13px;
+      font-family:inherit;outline:none;resize:none;transition:all .2s;
+    }
+    .note-in:focus{border-color:var(--accent);}
+    .note-save{
+      float:right;margin-top:7px;background:rgba(99,102,241,.25);
+      border:1px solid rgba(99,102,241,.3);color:#a5b4fc;border-radius:8px;
+      padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;
+    }
+
+    /* ─── History ─── */
+    .hist-item{
+      display:flex;align-items:center;padding:13px 20px;
+      border-bottom:1px solid rgba(255,255,255,.05);transition:background .15s;
+      cursor:pointer;
+    }
+    .hist-item:last-child{border-bottom:none;}
+    .hist-item:active{background:var(--glass-h);}
+    .hist-dot{width:9px;height:9px;border-radius:50%;margin-right:13px;flex-shrink:0;}
+    .hist-info{flex:1;}
+    .hist-date{font-size:14px;font-weight:600;}
+    .hist-sub{font-size:10px;color:var(--text3);margin-top:1px;}
+    .hist-note{font-size:11px;color:var(--text2);margin-top:3px;font-style:italic;}
+    .hist-status{font-size:11px;font-weight:700;padding:3px 9px;border-radius:50px;}
+    .hist-ot{font-size:10px;color:var(--orange);margin-left:6px;}
+
+    /* ─── Calendar ─── */
+    .cal-gc{margin:0 16px 14px;padding:18px;}
+    .cal-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;}
+    .cal-title{font-size:15px;font-weight:700;}
+    .cal-nav{display:flex;gap:8px;}
+    .cal-nav-btn{
+      width:30px;height:30px;border-radius:50%;border:1px solid var(--glass-b);
+      background:var(--glass);color:var(--text);cursor:pointer;font-size:15px;
+      display:flex;align-items:center;justify-content:center;
+    }
+    .cal-nav-btn:active{transform:scale(.88);}
+    .cal-dow{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-bottom:7px;}
+    .cal-dn{text-align:center;font-size:9px;color:var(--text3);font-weight:600;padding:3px 0;}
+    .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;}
+    .cal-day{
+      aspect-ratio:1;border-radius:50%;display:flex;align-items:center;justify-content:center;
+      font-size:12px;font-weight:500;cursor:pointer;transition:all .14s;position:relative;
+    }
+    .cal-day:active{transform:scale(.88);}
+    .cal-day.empty{pointer-events:none;}
+    .cal-day.istoday{border:2px solid var(--accent);font-weight:800;}
+    .cal-day.present{background:rgba(34,197,94,.28);color:#4ade80;}
+    .cal-day.absent{background:rgba(239,68,68,.28);color:#f87171;}
+    .cal-day.half{background:rgba(245,158,11,.28);color:#fbbf24;}
+    .cal-day.leave{background:rgba(59,130,246,.28);color:#60a5fa;}
+    .cal-day.sunday{color:#f87171;opacity:.5;}
+    .cal-day.hasnote::after{content:'•';position:absolute;bottom:1px;left:50%;transform:translateX(-50%);font-size:8px;color:var(--accent);}
+    .cal-legend{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;justify-content:center;}
+    .leg-item{display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text2);}
+    .leg-dot{width:7px;height:7px;border-radius:50%;}
+
+    /* ─── Report ─── */
+    .rep-gc{margin:0 16px 14px;padding:18px 22px;}
+    .circle-wrap{position:relative;width:110px;height:110px;margin:0 auto;}
+    .c-bg{fill:none;stroke:rgba(255,255,255,.08);stroke-width:9;}
+    .c-fg{fill:none;stroke-width:9;stroke-linecap:round;transform-origin:center;transform:rotate(-90deg);transition:stroke-dashoffset 1s cubic-bezier(.34,1.56,.64,1);}
+    .c-text{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;}
+    .c-pct{font-size:22px;font-weight:800;}
+    .c-sub{font-size:9px;color:var(--text3);}
+    .attnd-big{font-size:42px;font-weight:900;letter-spacing:-1.5px;}
+    .bar-chart{display:flex;align-items:flex-end;gap:5px;height:90px;margin:14px 0 0;}
+    .bar{flex:1;border-radius:5px 5px 0 0;transition:height .6s cubic-bezier(.34,1.56,.64,1);}
+    .bar-lbl{text-align:center;font-size:9px;color:var(--text3);margin-top:4px;}
+
+    /* ─── Bottom Nav ─── */
+    .bnav{position:fixed;bottom:0;left:0;right:0;z-index:200;display:flex;justify-content:center;}
+    .bnav-inner{
+      max-width:480px;width:100%;
+      background:rgba(7,7,26,.88);border-top:1px solid var(--glass-b);
+      backdrop-filter:blur(30px);padding:9px 16px 24px;
+      display:flex;justify-content:space-around;
+    }
+    .nb{
+      display:flex;flex-direction:column;align-items:center;gap:3px;
+      padding:7px 16px;border-radius:14px;cursor:pointer;background:none;border:none;
+      color:var(--text3);transition:all .2s;
+    }
+    .nb.on{color:var(--accent);background:rgba(99,102,241,.14);}
+    .nb-icon{font-size:20px;}
+    .nb-lbl{font-size:9px;font-weight:700;}
+
+    /* ─── Modal ─── */
+    .modal-ov{
+      position:fixed;inset:0;background:rgba(0,0,0,.72);
+      backdrop-filter:blur(12px);z-index:1000;
+      display:none;align-items:flex-end;justify-content:center;
+    }
+    .modal-ov.open{display:flex;animation:slideUp .3s cubic-bezier(.34,1.56,.64,1);}
+    @keyframes slideUp{from{opacity:0;transform:translateY(80px);}to{opacity:1;transform:translateY(0);}}
+    .modal-box{
+      width:100%;max-width:480px;
+      background:rgba(10,10,30,.97);border:1px solid var(--glass-b);
+      border-radius:26px 26px 0 0;padding:8px 24px 40px;
+      backdrop-filter:blur(30px);
+    }
+    .m-handle{width:38px;height:4px;background:rgba(255,255,255,.18);border-radius:50px;margin:0 auto 18px;}
+    .m-title{font-size:19px;font-weight:800;margin-bottom:18px;}
+    .m-field{margin-bottom:13px;}
+    .m-label{font-size:11px;color:var(--text2);font-weight:600;margin-bottom:5px;text-transform:uppercase;letter-spacing:.5px;}
+    .m-input{
+      width:100%;background:rgba(255,255,255,.07);border:1px solid var(--glass-b);
+      border-radius:12px;padding:13px 14px;color:var(--text);font-size:15px;
+      font-family:inherit;outline:none;transition:all .2s;
+    }
+    .m-input:focus{border-color:var(--accent);background:rgba(99,102,241,.1);}
+    .m-save{
+      width:100%;background:linear-gradient(135deg,#6366f1,#8b5cf6);border:none;
+      border-radius:14px;padding:15px;color:white;font-size:15px;font-weight:700;
+      cursor:pointer;margin-top:6px;box-shadow:0 8px 22px rgba(99,102,241,.4);
+    }
+    .m-save:active{transform:scale(.97);}
+    .m-cancel{
+      width:100%;background:rgba(255,255,255,.05);border:1px solid var(--glass-b);
+      border-radius:14px;padding:13px;color:var(--text2);font-size:14px;
+      font-weight:600;cursor:pointer;margin-top:8px;
+    }
+
+    /* ─── Toast ─── */
+    .toast{
+      position:fixed;top:60px;left:50%;transform:translateX(-50%) translateY(-100px);
+      background:rgba(99,102,241,.92);backdrop-filter:blur(20px);
+      border:1px solid rgba(99,102,241,.5);border-radius:50px;
+      padding:9px 20px;font-size:13px;font-weight:600;
+      z-index:999;transition:transform .4s cubic-bezier(.34,1.56,.64,1);
+      max-width:88%;text-align:center;
+    }
+    .toast.show{transform:translateX(-50%) translateY(0);}
+
+    /* ─── Misc ─── */
+    .sec-hdr{padding:0 16px;display:flex;justify-content:space-between;align-items:center;margin-bottom:9px;}
+    .sec-title{font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.9px;}
+    .see-all{font-size:12px;color:var(--accent);cursor:pointer;font-weight:700;}
+    .month-sel{display:flex;gap:7px;overflow-x:auto;padding:0 16px 4px;margin-bottom:14px;}
+    .month-sel::-webkit-scrollbar{display:none;}
+    .m-chip{
+      flex-shrink:0;padding:6px 13px;border-radius:50px;border:1px solid var(--glass-b);
+      background:var(--glass);font-size:11px;font-weight:600;cursor:pointer;
+      color:var(--text2);transition:all .2s;white-space:nowrap;
+    }
+    .m-chip.on{background:var(--accent);border-color:var(--accent);color:white;}
+    .danger-btn{
+      width:100%;margin-bottom:10px;padding:14px;border:none;border-radius:13px;
+      background:rgba(239,68,68,.12);color:#f87171;font-size:14px;font-weight:700;
+      cursor:pointer;border:1px solid rgba(239,68,68,.2);transition:all .2s;
+    }
+    .danger-btn:active{background:rgba(239,68,68,.28);}
+    .settings-row{
+      display:flex;justify-content:space-between;align-items:center;
+      padding:15px 20px;border-bottom:1px solid rgba(255,255,255,.05);cursor:pointer;
+    }
+    .settings-row:last-child{border-bottom:none;}
+    .settings-row:active{background:var(--glass-h);}
+    .s-left{display:flex;align-items:center;gap:11px;}
+    .s-icon{width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:17px;}
+    .s-title{font-size:14px;font-weight:600;}
+    .s-sub{font-size:11px;color:var(--text3);margin-top:1px;}
+    .s-val{font-size:13px;color:var(--text2);}
+    .export-btn{
+      display:flex;align-items:center;justify-content:center;gap:8px;
+      background:linear-gradient(135deg,#22c55e,#16a34a);color:white;
+      border:none;border-radius:13px;padding:13px 18px;
+      font-size:13px;font-weight:700;cursor:pointer;width:100%;margin-bottom:9px;
+      box-shadow:0 4px 18px rgba(34,197,94,.3);
+    }
+    .share-btn{
+      display:flex;align-items:center;justify-content:center;gap:8px;
+      background:linear-gradient(135deg,#25D366,#128C7E);color:white;
+      border:none;border-radius:13px;padding:13px 18px;
+      font-size:13px;font-weight:700;cursor:pointer;width:100%;
+      box-shadow:0 4px 18px rgba(37,211,102,.3);
+    }
+    input[type=number]{-moz-appearance:textfield;}
+    input[type=number]::-webkit-outer-spin-button,
+    input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;}
+  </style>
+</head>
+<body>
+
+<div class="orbs">
+  <div class="orb o1"></div><div class="orb o2"></div>
+  <div class="orb o3"></div><div class="orb o4"></div><div class="orb o5"></div>
+</div>
+
+<!-- ══════ LOGIN SCREEN ══════ -->
+<div id="login-screen">
+  <div class="login-box">
+    <div class="login-logo">📋</div>
+    <div class="login-title"><span>हाजिरी ऐप</span></div>
+    <div class="login-sub">मोबाइल नंबर से Login करें — डेटा हमेशा सुरक्षित रहेगा</div>
+
+    <div id="sync-status-bar" class="l-sync-badge">
+      <div class="sync-dot offline-dot"></div>
+      Firebase कनेक्ट हो रहा है...
+    </div>
+
+    <div class="login-tabs">
+      <button class="login-tab active" id="tab-login" onclick="showLoginTab('login')">लॉगिन</button>
+      <button class="login-tab" id="tab-register" onclick="showLoginTab('register')">नया अकाउंट</button>
+    </div>
+
+    <!-- Login Form -->
+    <div id="form-login">
+      <div class="l-field">
+        <div class="l-label">मोबाइल नंबर</div>
+        <input class="l-input" type="tel" id="login-phone" placeholder="10 अंक का नंबर" maxlength="10" inputmode="numeric"/>
+      </div>
+      <div class="l-field">
+        <div class="l-label">PIN (4 अंक)</div>
+        <input class="l-input" type="password" id="login-pin" placeholder="••••" maxlength="4" inputmode="numeric"/>
+      </div>
+      <button class="l-btn" onclick="doLogin()">🔓 लॉगिन करें</button>
+    </div>
+
+    <!-- Register Form -->
+    <div id="form-register" style="display:none;">
+      <div class="l-field">
+        <div class="l-label">आपका नाम</div>
+        <input class="l-input" type="text" id="reg-name" placeholder="जैसे: Ramesh Kumar"/>
+      </div>
+      <div class="l-field">
+        <div class="l-label">मोबाइल नंबर</div>
+        <input class="l-input" type="tel" id="reg-phone" placeholder="10 अंक का नंबर" maxlength="10" inputmode="numeric"/>
+      </div>
+      <div class="l-field">
+        <div class="l-label">नया PIN (4 अंक)</div>
+        <input class="l-input" type="password" id="reg-pin" placeholder="••••" maxlength="4" inputmode="numeric"/>
+      </div>
+      <button class="l-btn" onclick="doRegister()">✅ अकाउंट बनाएं</button>
+    </div>
+
+    <div class="l-offline" onclick="goOffline()">🔌 बिना Login के उपयोग करें (डेटा सिर्फ इस फोन में)</div>
+  </div>
+</div>
+
+<!-- ══════ MAIN APP ══════ -->
+<div id="app" style="display:none;">
+
+  <!-- HOME PAGE -->
+  <div class="pg on" id="pg-home">
+    <div class="hdr">
+      <div class="hdr-top">
+        <div class="hdr-title">📋 <span>हाजिरी</span></div>
+        <div class="hdr-right">
+          <div class="user-chip" onclick="showUserMenu()">
+            <div class="sync-indicator" id="sync-dot"></div>
+            <span id="user-name-chip">ऑफलाइन</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Today Card -->
+    <div class="gc today-gc" id="today-card">
+      <div class="t-label">आज की हाजिरी ◦ <span id="today-date-lbl"></span></div>
+      <div class="t-date" id="today-full"></div>
+      <div class="mark-grid">
+        <button class="mb bp" onclick="mark('present')">✅ हाजिर</button>
+        <button class="mb ba" onclick="mark('absent')">❌ गैरहाजिर</button>
+        <button class="mb bh" onclick="mark('half')">🌓 आधा दिन</button>
+        <button class="mb bl" onclick="mark('leave')">✈️ छुट्टी</button>
+      </div>
+      <div id="today-status"></div>
+
+      <!-- Daily Note -->
+      <div class="note-row" id="note-section" style="display:none;">
+        <textarea class="note-in" id="today-note" rows="2" placeholder="आज का नोट लिखें (वैकल्पिक)..."></textarea>
+        <button class="note-save" onclick="saveNote()">नोट सेव करें ✓</button>
+        <div style="clear:both;"></div>
+      </div>
+    </div>
+
+    <!-- Streak Banner -->
+    <div class="gc streak-banner">
+      <div class="streak-left">
+        <div class="streak-fire">🔥</div>
+        <div>
+          <div class="streak-num" id="streak-num">0</div>
+          <div class="streak-label">दिन की लगातार हाजिरी</div>
+        </div>
+      </div>
+      <div class="streak-best">
+        <div class="streak-best-num" id="streak-best">0</div>
+        <div class="streak-best-lbl">🏆 सबसे बड़ा स्ट्रीक</div>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-row">
+      <div class="sc sp"><div class="sc-num" id="s-p">0</div><div class="sc-lbl">हाजिर</div></div>
+      <div class="sc sa"><div class="sc-num" id="s-a">0</div><div class="sc-lbl">गैरहाजिर</div></div>
+      <div class="sc sh"><div class="sc-num" id="s-h">0</div><div class="sc-lbl">आधा दिन</div></div>
+      <div class="sc sl"><div class="sc-num" id="s-l">0</div><div class="sc-lbl">छुट्टी</div></div>
+    </div>
+
+    <!-- Salary Card -->
+    <div class="gc salary-gc">
+      <div class="sal-top">
+        <div class="sal-lbl">💰 इस महीने की कमाई</div>
+        <button class="edit-btn" onclick="openModal('salary-modal')">⚙️ सेट करें</button>
+      </div>
+      <div class="sal-amt">₹<span id="earned-amt">0</span></div>
+      <div class="sal-break">
+        <div class="sb-item"><div class="sb-val" id="pd-show">₹0</div><div class="sb-key">प्रति दिन</div></div>
+        <div class="sb-item"><div class="sb-val" id="ot-earn">₹0</div><div class="sb-key">ओवरटाइम</div></div>
+        <div class="sb-item"><div class="sb-val" id="adv-deduct">₹0</div><div class="sb-key">एडवांस कटेगा</div></div>
+      </div>
+      <div class="prog"><div class="prog-bar" id="prog-bar" style="width:0%"></div></div>
+      <div style="text-align:right; margin-top:6px; font-size:11px; color:var(--text3);">
+        हाथ में आएगा: <span style="color:var(--green); font-weight:800;" id="net-take">₹0</span>
+      </div>
+    </div>
+
+    <!-- OT Card -->
+    <div class="gc ot-gc">
+      <div class="ot-top">
+        <div>
+          <div class="sal-lbl">⏰ ओवरटाइम</div>
+          <div class="ot-total" id="ot-hrs">0 घंटे</div>
+        </div>
+        <div style="text-align:right;">
+          <div class="sal-lbl">OT कमाई</div>
+          <div style="font-size:17px;font-weight:800;color:var(--orange);" id="ot-amt">₹0</div>
+        </div>
+      </div>
+      <div class="ot-row">
+        <input class="ot-in" type="number" id="ot-inp" placeholder="आज के OT घंटे" min="0.5" max="12" step="0.5"/>
+        <button class="ot-add" onclick="addOT()">➕ जोड़ें</button>
+      </div>
+    </div>
+
+    <!-- Advance/Loan Card -->
+    <div class="gc adv-gc">
+      <div class="adv-total-row">
+        <div>
+          <div class="sal-lbl">💳 एडवांस / उधार</div>
+          <div class="adv-total" id="adv-total">₹0</div>
+        </div>
+        <button class="adv-add-btn" onclick="openModal('adv-modal')">+ एडवांस जोड़ें</button>
+      </div>
+      <div class="adv-list" id="adv-list"><div style="font-size:12px;color:var(--text3);text-align:center;padding:10px 0;">कोई एडवांस नहीं</div></div>
+    </div>
+
+    <!-- Recent History -->
+    <div class="sec-hdr">
+      <span class="sec-title">हालिया हाजिरी</span>
+      <span class="see-all" onclick="switchPage('history')">सभी देखें →</span>
+    </div>
+    <div class="gc" style="margin:0 16px 14px;" id="recent-hist"></div>
+  </div>
+
+  <!-- CALENDAR PAGE -->
+  <div class="pg" id="pg-calendar">
+    <div class="hdr">
+      <div class="hdr-top">
+        <div class="hdr-title">📅 <span>कैलेंडर</span></div>
+        <div class="date-chip" id="cal-badge"></div>
+      </div>
+    </div>
+    <div class="gc cal-gc">
+      <div class="cal-hdr">
+        <div class="cal-title" id="cal-title"></div>
+        <div class="cal-nav">
+          <button class="cal-nav-btn" onclick="changeMonth(-1)">‹</button>
+          <button class="cal-nav-btn" onclick="changeMonth(1)">›</button>
+        </div>
+      </div>
+      <div class="cal-dow">
+        <div class="cal-dn">रवि</div><div class="cal-dn">सोम</div>
+        <div class="cal-dn">मंगल</div><div class="cal-dn">बुध</div>
+        <div class="cal-dn">गुरु</div><div class="cal-dn">शुक्र</div>
+        <div class="cal-dn">शनि</div>
+      </div>
+      <div class="cal-grid" id="cal-grid"></div>
+      <div class="cal-legend">
+        <div class="leg-item"><div class="leg-dot" style="background:var(--green)"></div>हाजिर</div>
+        <div class="leg-item"><div class="leg-dot" style="background:var(--red)"></div>गैरहाजिर</div>
+        <div class="leg-item"><div class="leg-dot" style="background:var(--yellow)"></div>आधा</div>
+        <div class="leg-item"><div class="leg-dot" style="background:var(--blue)"></div>छुट्टी</div>
+        <div class="leg-item"><div class="leg-dot" style="background:var(--accent)"></div>नोट</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- REPORTS PAGE -->
+  <div class="pg" id="pg-reports">
+    <div class="hdr">
+      <div class="hdr-top"><div class="hdr-title">📊 <span>रिपोर्ट</span></div></div>
+    </div>
+    <div class="month-sel" id="rep-months"></div>
+
+    <div class="gc rep-gc">
+      <div style="display:flex;align-items:center;justify-content:space-between;">
+        <div>
+          <div class="sal-lbl">उपस्थिति %</div>
+          <div class="attnd-big" id="rep-pct">0<span style="font-size:18px;">%</span></div>
+          <div style="font-size:12px;color:var(--text2);margin-top:3px;" id="rep-worked">— दिन काम किए</div>
+        </div>
+        <div class="circle-wrap">
+          <svg viewBox="0 0 110 110" width="110" height="110">
+            <circle class="c-bg" cx="55" cy="55" r="47"/>
+            <circle class="c-fg" cx="55" cy="55" r="47" id="c-fg"
+              stroke="url(#cg)" stroke-dasharray="295.31" stroke-dashoffset="295.31"/>
+            <defs>
+              <linearGradient id="cg" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="#6366f1"/><stop offset="100%" stop-color="#22c55e"/>
+              </linearGradient>
+            </defs>
+          </svg>
+          <div class="c-text"><div class="c-pct" id="c-pct-txt">0%</div><div class="c-sub">उपस्थिति</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 6-month bar -->
+    <div class="gc rep-gc">
+      <div class="sal-lbl" style="margin-bottom:6px;">पिछले 6 महीने (काम के दिन)</div>
+      <div class="bar-chart" id="bar-chart"></div>
+      <div style="display:flex;gap:5px;" id="bar-lbls"></div>
+    </div>
+
+    <!-- Breakdown -->
+    <div class="gc rep-gc">
+      <div class="sal-lbl">इस महीने का हिसाब</div>
+      <div style="margin-top:14px;" id="rep-breakdown"></div>
+    </div>
+
+    <!-- Export -->
+    <div class="gc rep-gc">
+      <div class="sal-lbl" style="margin-bottom:12px;">Export & Share</div>
+      <button class="export-btn" onclick="copyReport()">📄 Report Copy करें</button>
+      <button class="share-btn" onclick="shareWA()">💬 WhatsApp पर Share करें</button>
+    </div>
+  </div>
+
+  <!-- HISTORY PAGE -->
+  <div class="pg" id="pg-history">
+    <div class="hdr">
+      <div class="hdr-top"><div class="hdr-title">📜 <span>इतिहास</span></div></div>
+    </div>
+    <div class="month-sel" id="hist-months"></div>
+    <div class="gc" style="margin:0 16px 14px;" id="full-hist"></div>
+  </div>
+
+  <!-- SETTINGS PAGE -->
+  <div class="pg" id="pg-settings">
+    <div class="hdr">
+      <div class="hdr-top"><div class="hdr-title">⚙️ <span>सेटिंग्स</span></div></div>
+    </div>
+
+    <div class="gc" style="margin:0 16px 14px;">
+      <div class="settings-row" onclick="openModal('salary-modal')">
+        <div class="s-left">
+          <div class="s-icon" style="background:rgba(99,102,241,.18);">💰</div>
+          <div><div class="s-title">तनख्वाह सेटिंग</div><div class="s-sub">मासिक, OT दर</div></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:5px;">
+          <span class="s-val" id="set-sal">—</span><span style="color:var(--text3);">›</span>
+        </div>
+      </div>
+      <div class="settings-row" onclick="openModal('workdays-modal')">
+        <div class="s-left">
+          <div class="s-icon" style="background:rgba(34,197,94,.18);">📅</div>
+          <div><div class="s-title">काम के दिन</div><div class="s-sub">महीने में कार्यदिवस</div></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:5px;">
+          <span class="s-val" id="set-wd">26</span><span style="color:var(--text3);">›</span>
+        </div>
+      </div>
+      <div class="settings-row" onclick="showLoginScreen()">
+        <div class="s-left">
+          <div class="s-icon" style="background:rgba(236,72,153,.18);">🔄</div>
+          <div><div class="s-title">Account Switch</div><div class="s-sub">दूसरे अकाउंट से Login</div></div>
+        </div>
+        <span style="color:var(--text3);">›</span>
+      </div>
+    </div>
+
+    <div class="sec-title" style="padding:0 16px;margin-bottom:8px;">⚠️ खतरनाक ज़ोन</div>
+    <div style="padding:0 16px;">
+      <button class="danger-btn" onclick="clearMonth()">🗑️ इस महीने का डेटा मिटाएं</button>
+      <button class="danger-btn" onclick="clearAll()">⛔ सारा डेटा मिटाएं</button>
+    </div>
+  </div>
+
+</div><!-- /app -->
+
+<!-- Bottom Nav -->
+<div class="bnav" id="bnav" style="display:none;">
+  <div class="bnav-inner">
+    <button class="nb on" id="nb-home"     onclick="switchPage('home')">    <div class="nb-icon">🏠</div><div class="nb-lbl">होम</div></button>
+    <button class="nb"   id="nb-calendar" onclick="switchPage('calendar')"><div class="nb-icon">📅</div><div class="nb-lbl">कैलेंडर</div></button>
+    <button class="nb"   id="nb-reports"  onclick="switchPage('reports')"> <div class="nb-icon">📊</div><div class="nb-lbl">रिपोर्ट</div></button>
+    <button class="nb"   id="nb-history"  onclick="switchPage('history')"> <div class="nb-icon">📜</div><div class="nb-lbl">इतिहास</div></button>
+    <button class="nb"   id="nb-settings" onclick="switchPage('settings')"><div class="nb-icon">⚙️</div><div class="nb-lbl">सेटिंग्स</div></button>
+  </div>
+</div>
+
+<!-- ── Modals ── -->
+<!-- Salary Modal -->
+<div class="modal-ov" id="salary-modal" onclick="closeModal('salary-modal',event)">
+  <div class="modal-box">
+    <div class="m-handle"></div>
+    <div class="m-title">💰 तनख्वाह सेटिंग</div>
+    <div class="m-field"><div class="m-label">मासिक तनख्वाह (₹)</div><input class="m-input" type="number" id="sal-inp" placeholder="जैसे: 15000"/></div>
+    <div class="m-field"><div class="m-label">ओवरटाइम दर (₹/घंटा)</div><input class="m-input" type="number" id="ot-rate-inp" placeholder="जैसे: 100"/></div>
+    <button class="m-save" onclick="saveSalary()">💾 सेव करें</button>
+    <button class="m-cancel" onclick="closeModal('salary-modal')">रद्द करें</button>
+  </div>
+</div>
+
+<!-- Work Days Modal -->
+<div class="modal-ov" id="workdays-modal" onclick="closeModal('workdays-modal',event)">
+  <div class="modal-box">
+    <div class="m-handle"></div>
+    <div class="m-title">📅 काम के दिन</div>
+    <div class="m-field"><div class="m-label">महीने में कुल कार्यदिवस</div><input class="m-input" type="number" id="wd-inp" placeholder="जैसे: 26" min="1" max="31"/></div>
+    <button class="m-save" onclick="saveWorkDays()">💾 सेव करें</button>
+    <button class="m-cancel" onclick="closeModal('workdays-modal')">रद्द करें</button>
+  </div>
+</div>
+
+<!-- Advance Modal -->
+<div class="modal-ov" id="adv-modal" onclick="closeModal('adv-modal',event)">
+  <div class="modal-box">
+    <div class="m-handle"></div>
+    <div class="m-title">💳 एडवांस जोड़ें</div>
+    <div class="m-field"><div class="m-label">रकम (₹)</div><input class="m-input" type="number" id="adv-amt-inp" placeholder="जैसे: 2000"/></div>
+    <div class="m-field"><div class="m-label">कारण</div><input class="m-input" type="text" id="adv-reason-inp" placeholder="जैसे: घर के लिए, दवाई..."/></div>
+    <button class="m-save" onclick="addAdvance()">💾 सेव करें</button>
+    <button class="m-cancel" onclick="closeModal('adv-modal')">रद्द करें</button>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ══════════════════════════════════════════════════
+//  CONSTANTS & HELPERS
+// ══════════════════════════════════════════════════
+const MHI = ['जनवरी','फरवरी','मार्च','अप्रैल','मई','जून','जुलाई','अगस्त','सितंबर','अक्टूबर','नवंबर','दिसंबर'];
+const DHI  = ['रविवार','सोमवार','मंगलवार','बुधवार','गुरुवार','शुक्रवार','शनिवार'];
+const SI = {
+  present:{ lbl:'हाजिर',    col:'var(--green)',  bg:'rgba(34,197,94,.15)',  dot:'#22c55e' },
+  absent: { lbl:'गैरहाजिर', col:'var(--red)',    bg:'rgba(239,68,68,.15)',  dot:'#ef4444' },
+  half:   { lbl:'आधा दिन',  col:'var(--yellow)', bg:'rgba(245,158,11,.15)', dot:'#f59e0b' },
+  leave:  { lbl:'छुट्टी',   col:'var(--blue)',   bg:'rgba(59,130,246,.15)', dot:'#3b82f6' },
+};
+
+const TODAY = new Date();
+const todayKey = dk(TODAY);
+const todayMK  = mk(TODAY);
+
+function dk(d){ return `${d.getFullYear()}-${p2(d.getMonth()+1)}-${p2(d.getDate())}`; }
+function mk(d){ return `${d.getFullYear()}-${p2(d.getMonth()+1)}`; }
+function p2(n){ return String(n).padStart(2,'0'); }
+function fmt(n){ return Math.round(n).toLocaleString('en-IN'); }
+
+// ══════════════════════════════════════════════════
+//  LOCAL CACHE (synced with Firebase or localStorage)
+// ══════════════════════════════════════════════════
+window._localCache = {
+  attendance: {},  // { "2026-11-12": { status, note } }
+  ot: {},          // { "2026-11-12": { hours } }
+  settings: { salary:0, otRate:50, workDays:26 },
+  advances: {}     // { id: { amount, reason, date } }
+};
+
+function getAtt(key){ const e=window._localCache.attendance[key]; return e?e.status:null; }
+function getNote(key){ const e=window._localCache.attendance[key]; return e?e.note||'':''; }
+function getOTHrs(key){ const e=window._localCache.ot[key]; return e?e.hours:0; }
+function getSett(){ return window._localCache.settings||{salary:0,otRate:50,workDays:26}; }
+
+// Local storage fallback
+function LS_load(){
+  try{
+    const att = JSON.parse(localStorage.getItem('h_att')||'{}');
+    const ot  = JSON.parse(localStorage.getItem('h_ot')||'{}');
+    const set = JSON.parse(localStorage.getItem('h_set')||'{"salary":0,"otRate":50,"workDays":26}');
+    const adv = JSON.parse(localStorage.getItem('h_adv')||'{}');
+    // Normalize old format
+    Object.entries(att).forEach(([k,v])=>{
+      if(typeof v==='string') att[k]={status:v,note:''};
+    });
+    Object.entries(ot).forEach(([k,v])=>{
+      if(typeof v==='number') ot[k]={hours:v};
+    });
+    window._localCache = {attendance:att,ot,settings:set,advances:adv};
+  }catch(e){}
+}
+function LS_save(){
+  localStorage.setItem('h_att', JSON.stringify(window._localCache.attendance));
+  localStorage.setItem('h_ot',  JSON.stringify(window._localCache.ot));
+  localStorage.setItem('h_set', JSON.stringify(window._localCache.settings));
+  localStorage.setItem('h_adv', JSON.stringify(window._localCache.advances));
+}
+
+// ══════════════════════════════════════════════════
+//  AUTH STATE
+// ══════════════════════════════════════════════════
+let isOnline = false;
+let currentUser = null;
+let calView = new Date(TODAY.getFullYear(), TODAY.getMonth(), 1);
+let repMonth  = mk(TODAY);
+let histMonth = mk(TODAY);
+let currentPage = 'home';
+
+function getSavedSession(){
+  try{ return JSON.parse(localStorage.getItem('h_session')||'null'); }
+  catch{ return null; }
+}
+function setSavedSession(s){ localStorage.setItem('h_session', JSON.stringify(s)); }
+function clearSession(){ localStorage.removeItem('h_session'); }
+
+// ══════════════════════════════════════════════════
+//  FIREBASE SYNC
+// ══════════════════════════════════════════════════
+function startSync(userId, name){
+  isOnline = true;
+  currentUser = { phone: userId, name };
+  updateSyncUI(true);
+
+  if(window._firebase && window._firebase.isReady()){
+    window._firebase.setUser(userId);
+    window._firebase.listenAll((type)=>{
+      if(type==='settings') renderSettings();
+      renderHome();
+      if(currentPage==='calendar') renderCalendar();
+      if(currentPage==='reports') renderReports();
+      if(currentPage==='history') renderHistory();
+    });
+    showToast(`☁️ ${name} — Sync चालू`, '#22c55e');
+  }
+}
+
+function updateSyncUI(online){
+  const dot = document.getElementById('sync-dot');
+  const chip = document.getElementById('user-name-chip');
+  if(online && currentUser){
+    dot.className = 'sync-indicator sync-on';
+    chip.textContent = currentUser.name || currentUser.phone;
+  } else {
+    dot.className = 'sync-indicator sync-off';
+    chip.textContent = 'ऑफलाइन';
+  }
+}
+
+// ══════════════════════════════════════════════════
+//  LOGIN FUNCTIONS
+// ══════════════════════════════════════════════════
+function showLoginTab(tab){
+  document.getElementById('tab-login').classList.toggle('active', tab==='login');
+  document.getElementById('tab-register').classList.toggle('active', tab==='register');
+  document.getElementById('form-login').style.display = tab==='login'?'block':'none';
+  document.getElementById('form-register').style.display = tab==='register'?'block':'none';
+}
+
+async function doLogin(){
+  const phone = document.getElementById('login-phone').value.trim();
+  const pin   = document.getElementById('login-pin').value.trim();
+  if(phone.length<10||pin.length<4){ showToast('⚠️ सही नंबर/PIN डालें','#f59e0b'); return; }
+
+  if(window._firebase && window._firebase.isReady()){
+    showToast('🔄 Checking...','var(--accent)');
+    const user = await window._firebase.verifyUser(phone, pin);
+    if(user){
+      setSavedSession({ phone, pin, name: user.name });
+      startSync(phone, user.name);
+      enterApp();
+    } else {
+      showToast('❌ गलत नंबर या PIN','#ef4444');
+    }
+  } else {
+    // Offline login — just check locally
+    const saved = getSavedSession();
+    if(saved && saved.phone===phone && saved.pin===pin){
+      currentUser = { phone, name: saved.name };
+      enterApp();
+    } else {
+      showToast('⚠️ Firebase नहीं मिला — Offline mode में जाएं','#f59e0b');
+    }
+  }
+}
+
+async function doRegister(){
+  const name  = document.getElementById('reg-name').value.trim();
+  const phone = document.getElementById('reg-phone').value.trim();
+  const pin   = document.getElementById('reg-pin').value.trim();
+  if(!name||phone.length<10||pin.length<4){ showToast('⚠️ सभी फील्ड भरें','#f59e0b'); return; }
+
+  if(window._firebase && window._firebase.isReady()){
+    showToast('⏳ अकाउंट बन रहा है...','var(--accent)');
+    const ok = await window._firebase.registerUser(phone, pin, name);
+    if(ok){
+      setSavedSession({ phone, pin, name });
+      startSync(phone, name);
+      enterApp();
+      showToast(`🎉 Welcome ${name}!`,'#22c55e');
+    } else {
+      showToast('❌ Error — फिर कोशिश करें','#ef4444');
+    }
+  } else {
+    setSavedSession({ phone, pin, name });
+    currentUser = { phone, name };
+    enterApp();
+    showToast('⚠️ Offline — Firebase config जोड़ें','#f59e0b');
+  }
+}
+
+function goOffline(){
+  LS_load();
+  currentUser = null;
+  enterApp();
+  showToast('🔌 Offline Mode','#f59e0b');
+}
+
+function showLoginScreen(){
+  if(window._firebase) window._firebase.stopListening();
+  clearSession();
+  document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('bnav').style.display = 'none';
+}
+
+function showUserMenu(){
+  if(!currentUser){ showToast('ऑफलाइन मोड','#f59e0b'); return; }
+  if(confirm(`${currentUser.name||currentUser.phone}\n\nLogout करें?`)) showLoginScreen();
+}
+
+function enterApp(){
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  document.getElementById('bnav').style.display = 'flex';
+  updateSyncUI(isOnline);
+  renderHome();
+}
+
+// ══════════════════════════════════════════════════
+//  PAGE SWITCH
+// ══════════════════════════════════════════════════
+function switchPage(p){
+  currentPage = p;
+  document.querySelectorAll('.pg').forEach(x=>x.classList.remove('on'));
+  document.querySelectorAll('.nb').forEach(x=>x.classList.remove('on'));
+  document.getElementById('pg-'+p).classList.add('on');
+  document.getElementById('nb-'+p)?.classList.add('on');
+  if(p==='calendar') renderCalendar();
+  if(p==='reports')  renderReports();
+  if(p==='history')  renderHistory();
+  if(p==='settings') renderSettings();
+}
+
+// ══════════════════════════════════════════════════
+//  HOME
+// ══════════════════════════════════════════════════
+function renderHome(){
+  // Dates
+  document.getElementById('today-date-lbl').textContent =
+    `${TODAY.getDate()} ${MHI[TODAY.getMonth()]} ${TODAY.getFullYear()}`;
+  document.getElementById('today-full').textContent =
+    `${DHI[TODAY.getDay()]}, ${TODAY.getDate()} ${MHI[TODAY.getMonth()]}`;
+
+  // Month stats
+  let p=0,a=0,h=0,l=0;
+  Object.entries(window._localCache.attendance).forEach(([k,v])=>{
+    if(!k.startsWith(todayMK)) return;
+    if(v.status==='present') p++;
+    else if(v.status==='absent') a++;
+    else if(v.status==='half') h++;
+    else if(v.status==='leave') l++;
+  });
+  document.getElementById('s-p').textContent=p;
+  document.getElementById('s-a').textContent=a;
+  document.getElementById('s-h').textContent=h;
+  document.getElementById('s-l').textContent=l;
+
+  // Today status
+  const todaySt = getAtt(todayKey);
+  const noteVal  = getNote(todayKey);
+  const noteSection = document.getElementById('note-section');
+  document.querySelectorAll('.mb').forEach(b=>b.classList.remove('sel'));
+  if(todaySt){
+    const info = SI[todaySt];
+    document.getElementById('today-status').innerHTML=`
+      <div class="status-pill" style="background:${info.bg};color:${info.col};">
+        <div class="sdot" style="background:${info.dot};"></div>आज: ${info.lbl}
+      </div>`;
+    const idx = {present:0,absent:1,half:2,leave:3}[todaySt];
+    document.querySelectorAll('.mb')[idx]?.classList.add('sel');
+    noteSection.style.display = 'block';
+    document.getElementById('today-note').value = noteVal;
+  } else {
+    document.getElementById('today-status').innerHTML=`
+      <div class="status-pill" style="background:rgba(255,255,255,.07);color:var(--text3);">
+        <div class="sdot" style="background:var(--text3);animation:none;"></div>अभी तक नहीं भरी
+      </div>`;
+    noteSection.style.display = 'none';
+  }
+
+  // Streak
+  const { streak, best } = calcStreak();
+  document.getElementById('streak-num').textContent = streak;
+  document.getElementById('streak-best').textContent = best;
+
+  // Salary
+  const s = getSett();
+  const perDay = s.salary / s.workDays;
+  const baseE = (p*perDay) + (h*(perDay/2));
+
+  // OT for month
+  let totalOT = 0;
+  Object.entries(window._localCache.ot).forEach(([k,v])=>{ if(k.startsWith(todayMK)) totalOT+=v.hours||0; });
+  const otE = totalOT * (s.otRate||50);
+
+  // Advances for month
+  let totalAdv = 0;
+  Object.values(window._localCache.advances).forEach(adv=>{
+    if(adv.date&&adv.date.startsWith(todayMK)) totalAdv += adv.amount||0;
+  });
+
+  const netTake = baseE + otE - totalAdv;
+
+  document.getElementById('earned-amt').textContent = fmt(baseE);
+  document.getElementById('pd-show').textContent = s.salary>0 ? '₹'+fmt(perDay) : '₹0';
+  document.getElementById('ot-earn').textContent = '₹'+fmt(otE);
+  document.getElementById('adv-deduct').textContent = '-₹'+fmt(totalAdv);
+  document.getElementById('net-take').textContent = '₹'+fmt(Math.max(0,netTake));
+  const pct = s.salary>0 ? Math.min(100,(baseE+otE)/s.salary*100) : 0;
+  document.getElementById('prog-bar').style.width = pct+'%';
+
+  // OT display
+  document.getElementById('ot-hrs').textContent = totalOT+' घंटे';
+  document.getElementById('ot-amt').textContent = '₹'+fmt(otE);
+
+  // Advances list
+  renderAdvList();
+
+  // Recent history
+  renderRecent();
+}
+
+function calcStreak(){
+  let streak=0, best=0, cur=0;
+  const att = window._localCache.attendance;
+  // Go backwards from yesterday
+  const d = new Date(TODAY);
+  d.setDate(d.getDate()-1);
+  for(let i=0;i<365;i++){
+    const k = dk(d);
+    const st = att[k]?.status;
+    if(st==='present'||st==='half'){
+      cur++;
+      if(i<streak+1) streak=cur;
+    } else if(st==='absent') {
+      best=Math.max(best,cur);
+      cur=0;
+    }
+    d.setDate(d.getDate()-1);
+  }
+  best=Math.max(best,cur);
+  // Also check today
+  const todaySt = att[todayKey]?.status;
+  if(todaySt==='present'||todaySt==='half') streak++;
+  return { streak, best };
+}
+
+function renderAdvList(){
+  const list = document.getElementById('adv-list');
+  const advs = Object.entries(window._localCache.advances)
+    .filter(([,v])=>v.date&&v.date.startsWith(todayMK))
+    .sort(([,a],[,b])=>b.date.localeCompare(a.date));
+
+  let total=0;
+  if(advs.length===0){
+    list.innerHTML='<div style="font-size:12px;color:var(--text3);text-align:center;padding:8px 0;">कोई एडवांस नहीं</div>';
+  } else {
+    list.innerHTML = advs.map(([id,adv])=>{
+      total += adv.amount||0;
+      const d = new Date(adv.date+'T00:00:00');
+      return `<div class="adv-item">
+        <div class="adv-item-left">
+          <div class="adv-item-reason">${adv.reason||'—'}</div>
+          <div class="adv-item-date">${d.getDate()} ${MHI[d.getMonth()]}</div>
+        </div>
+        <div class="adv-item-amt">-₹${fmt(adv.amount)}</div>
+        <button class="adv-del" onclick="deleteAdvance('${id}')">🗑</button>
+      </div>`;
+    }).join('');
+  }
+  document.getElementById('adv-total').textContent = '₹'+fmt(total);
+}
+
+function renderRecent(){
+  const entries = Object.entries(window._localCache.attendance)
+    .sort(([a],[b])=>b.localeCompare(a)).slice(0,7);
+  const el = document.getElementById('recent-hist');
+  if(!entries.length){
+    el.innerHTML='<div style="text-align:center;padding:28px;color:var(--text3);">ऊपर हाजिरी भरें</div>';
+    return;
+  }
+  el.innerHTML = entries.map(([k,v])=>{
+    const info = SI[v.status];
+    const d = new Date(k+'T00:00:00');
+    const ot = window._localCache.ot[k]?.hours;
+    return `<div class="hist-item">
+      <div class="hist-dot" style="background:${info.dot}"></div>
+      <div class="hist-info">
+        <div class="hist-date">${d.getDate()} ${MHI[d.getMonth()]} ${d.getFullYear()}</div>
+        <div class="hist-sub">${DHI[d.getDay()]}${ot?' • '+ot+'h OT':''}</div>
+        ${v.note?`<div class="hist-note">📝 ${v.note}</div>`:''}
+      </div>
+      <div class="hist-status" style="background:${info.bg};color:${info.col};">${info.lbl}</div>
+    </div>`;
+  }).join('');
+}
+
+// ══════════════════════════════════════════════════
+//  MARK ATTENDANCE
+// ══════════════════════════════════════════════════
+function mark(status){
+  const att = window._localCache.attendance;
+  const prev = att[todayKey]?.status;
+  let newNote = getNote(todayKey);
+
+  if(prev===status){
+    delete att[todayKey];
+    if(window._firebase?.isReady() && window._firebase.getUser())
+      window._firebase.deleteAttendance(todayKey);
+    showToast('हाजिरी हटाई','rgba(120,120,120,.9)');
+  } else {
+    att[todayKey] = { status, note: newNote };
+    if(window._firebase?.isReady() && window._firebase.getUser())
+      window._firebase.saveAttendance(todayKey, status, newNote);
+    showToast(`${SI[status].lbl} दर्ज ✓`, SI[status].dot);
+  }
+
+  LS_save();
+  renderHome();
+}
+
+function saveNote(){
+  const note = document.getElementById('today-note').value.trim();
+  const att = window._localCache.attendance;
+  if(!att[todayKey]) return;
+  att[todayKey].note = note;
+  if(window._firebase?.isReady() && window._firebase.getUser())
+    window._firebase.saveAttendance(todayKey, att[todayKey].status, note);
+  LS_save();
+  showToast('📝 नोट सेव!','var(--accent)');
+}
+
+// ══════════════════════════════════════════════════
+//  OT
+// ══════════════════════════════════════════════════
+function addOT(){
+  const hrs = parseFloat(document.getElementById('ot-inp').value);
+  if(!hrs||hrs<=0){ showToast('⚠️ घंटे डालें','#f59e0b'); return; }
+  const ot = window._localCache.ot;
+  ot[todayKey] = { hours: (ot[todayKey]?.hours||0)+hrs };
+  if(window._firebase?.isReady() && window._firebase.getUser())
+    window._firebase.saveOT(todayKey, ot[todayKey].hours);
+  LS_save();
+  document.getElementById('ot-inp').value='';
+  showToast(`⏰ ${hrs}h OT जोड़ा`,'#f97316');
+  renderHome();
+}
+
+// ══════════════════════════════════════════════════
+//  ADVANCES
+// ══════════════════════════════════════════════════
+function addAdvance(){
+  const amt    = parseFloat(document.getElementById('adv-amt-inp').value)||0;
+  const reason = document.getElementById('adv-reason-inp').value.trim();
+  if(amt<=0){ showToast('⚠️ रकम डालें','#f59e0b'); return; }
+  const id = 'adv_'+Date.now();
+  const adv = { amount:amt, reason, date:todayKey };
+  window._localCache.advances[id] = adv;
+  if(window._firebase?.isReady() && window._firebase.getUser())
+    window._firebase.saveAdvance(id, adv);
+  LS_save();
+  closeModal('adv-modal');
+  document.getElementById('adv-amt-inp').value='';
+  document.getElementById('adv-reason-inp').value='';
+  showToast(`💳 ₹${fmt(amt)} एडवांस दर्ज`,'#ec4899');
+  renderHome();
+}
+
+function deleteAdvance(id){
+  if(!confirm('यह एडवांस मिटाएं?')) return;
+  delete window._localCache.advances[id];
+  if(window._firebase?.isReady() && window._firebase.getUser())
+    window._firebase.deleteAdvance(id);
+  LS_save();
+  renderHome();
+  showToast('🗑️ एडवांस मिटाया','rgba(120,120,120,.9)');
+}
+
+// ══════════════════════════════════════════════════
+//  CALENDAR
+// ══════════════════════════════════════════════════
+function renderCalendar(){
+  const yr = calView.getFullYear();
+  const mo = calView.getMonth();
+  document.getElementById('cal-title').textContent = `${MHI[mo]} ${yr}`;
+  document.getElementById('cal-badge').textContent  = `${MHI[mo]} ${yr}`;
+
+  const att = window._localCache.attendance;
+  const ot  = window._localCache.ot;
+  const prefix = `${yr}-${p2(mo+1)}`;
+  const firstDay = new Date(yr,mo,1).getDay();
+  const days = new Date(yr,mo+1,0).getDate();
+
+  let html = '<div class="cal-day empty"></div>'.repeat(firstDay);
+  for(let d=1;d<=days;d++){
+    const key = `${prefix}-${p2(d)}`;
+    const st  = att[key]?.status||'';
+    const hasNote = !!(att[key]?.note);
+    const dow = new Date(yr,mo,d).getDay();
+    const isToday = key===todayKey;
+    const cls = ['cal-day',st,isToday?'istoday':'',(!st&&dow===0)?'sunday':'',hasNote?'hasnote':''].filter(Boolean).join(' ');
+    html += `<div class="${cls}" onclick="calClick('${key}',${d},${mo})">${d}</div>`;
+  }
+  document.getElementById('cal-grid').innerHTML=html;
+}
+
+function calClick(key,d,mo){
+  const pd = new Date(key+'T00:00:00');
+  if(pd>TODAY){ showToast('⏳ भविष्य की तारीख नहीं','#6366f1'); return; }
+  const att = window._localCache.attendance;
+  const sts = ['present','absent','half','leave'];
+  const cur = att[key]?.status;
+  const curIdx = sts.indexOf(cur);
+  const note = att[key]?.note||'';
+
+  if(curIdx===sts.length-1){
+    delete att[key];
+    if(window._firebase?.isReady() && window._firebase.getUser())
+      window._firebase.deleteAttendance(key);
+    showToast('हटाया','rgba(120,120,120,.9)');
+  } else {
+    const next = sts[curIdx+1];
+    att[key]={status:next,note};
+    if(window._firebase?.isReady() && window._firebase.getUser())
+      window._firebase.saveAttendance(key,next,note);
+    showToast(`${SI[next].lbl} — ${d} ${MHI[mo]}`,SI[next].dot);
+  }
+  LS_save();
+  renderCalendar();
+  renderHome();
+}
+
+function changeMonth(dir){
+  calView.setMonth(calView.getMonth()+dir);
+  renderCalendar();
+}
+
+// ══════════════════════════════════════════════════
+//  REPORTS
+// ══════════════════════════════════════════════════
+function renderReports(){
+  // Month chips
+  const ms = document.getElementById('rep-months');
+  ms.innerHTML='';
+  for(let i=5;i>=0;i--){
+    const d = new Date(TODAY.getFullYear(), TODAY.getMonth()-i, 1);
+    const m = mk(d);
+    const c = document.createElement('div');
+    c.className='m-chip'+(m===repMonth?' on':'');
+    c.textContent=`${MHI[d.getMonth()]} ${d.getFullYear()}`;
+    c.onclick=()=>{ repMonth=m; renderReports(); };
+    ms.appendChild(c);
+  }
+  ms.scrollLeft=ms.scrollWidth;
+
+  const att = window._localCache.attendance;
+  const ot  = window._localCache.ot;
+  const s   = getSett();
+  let p=0,a=0,h=0,l=0,otT=0;
+
+  Object.entries(att).forEach(([k,v])=>{
+    if(!k.startsWith(repMonth)) return;
+    if(v.status==='present') p++;
+    else if(v.status==='absent') a++;
+    else if(v.status==='half') h++;
+    else if(v.status==='leave') l++;
+  });
+  Object.entries(ot).forEach(([k,v])=>{ if(k.startsWith(repMonth)) otT+=v.hours||0; });
+
+  // Advances for month
+  let advT=0;
+  Object.values(window._localCache.advances).forEach(adv=>{
+    if(adv.date&&adv.date.startsWith(repMonth)) advT+=adv.amount||0;
+  });
+
+  const worked = p + h*0.5;
+  const totalDays = p+a+h+l;
+  const pct = totalDays>0 ? Math.round((worked/totalDays)*100) : 0;
+  document.getElementById('rep-pct').innerHTML = pct+'<span style="font-size:18px;">%</span>';
+  document.getElementById('rep-worked').textContent = `${worked} दिन काम किए`;
+  document.getElementById('c-pct-txt').textContent = pct+'%';
+  const off = 295.31-(pct/100)*295.31;
+  document.getElementById('c-fg').style.strokeDashoffset = off;
+
+  // 6-month bar
+  const months6=[];
+  for(let i=5;i>=0;i--){
+    const d=new Date(TODAY.getFullYear(),TODAY.getMonth()-i,1);
+    months6.push({m:mk(d),lbl:MHI[d.getMonth()].slice(0,3)});
+  }
+  const maxW=Math.max(1,...months6.map(({m})=>{
+    let pp=0,hh=0;
+    Object.entries(att).forEach(([k,v])=>{ if(k.startsWith(m)){if(v.status==='present')pp++;else if(v.status==='half')hh++;} });
+    return pp+hh*0.5;
+  }));
+
+  document.getElementById('bar-chart').innerHTML='';
+  document.getElementById('bar-lbls').innerHTML='';
+  months6.forEach(({m,lbl})=>{
+    let pp=0,hh=0;
+    Object.entries(att).forEach(([k,v])=>{ if(k.startsWith(m)){if(v.status==='present')pp++;else if(v.status==='half')hh++;} });
+    const w=pp+hh*0.5;
+    const hPct=maxW>0?(w/maxW)*100:0;
+    const bar=document.createElement('div');
+    bar.className='bar';
+    bar.style.cssText=`height:${hPct}%;background:linear-gradient(180deg,${m===repMonth?'#6366f1':'rgba(255,255,255,.12)'} 0%,transparent 100%);`;
+    document.getElementById('bar-chart').appendChild(bar);
+    const lbl2=document.createElement('div');
+    lbl2.className='bar-lbl'; lbl2.style.flex='1';
+    lbl2.textContent=lbl;
+    document.getElementById('bar-lbls').appendChild(lbl2);
+  });
+
+  // Breakdown
+  const perDay = s.salary/s.workDays;
+  const baseE = (p*perDay)+(h*(perDay/2));
+  const otE = otT*(s.otRate||50);
+  const total = baseE+otE;
+  const net = total-advT;
+
+  document.getElementById('rep-breakdown').innerHTML=`
+    ${row('✅ हाजिर दिन', p+' दिन', 'var(--green)')}
+    ${row('❌ गैरहाजिर', a+' दिन', 'var(--red)')}
+    ${row('🌓 आधा दिन', h+' दिन', 'var(--yellow)')}
+    ${row('✈️ छुट्टी', l+' दिन', 'var(--blue)')}
+    ${row('⏰ ओवरटाइम', otT+' घंटे', 'var(--orange)')}
+    ${row('💳 एडवांस', '-₹'+fmt(advT), 'var(--pink)')}
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:14px;background:rgba(99,102,241,.12);border-radius:12px;margin-top:4px;">
+      <span style="font-size:15px;font-weight:700;">🤑 हाथ में आएगा</span>
+      <span style="font-size:19px;font-weight:900;color:var(--green);">₹${fmt(Math.max(0,net))}</span>
+    </div>`;
+}
+
+function row(k,v,col){
+  return `<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.05);">
+    <span style="color:var(--text2);font-size:13px;">${k}</span>
+    <span style="font-weight:700;color:${col};">${v}</span>
+  </div>`;
+}
+
+// ══════════════════════════════════════════════════
+//  HISTORY
+// ══════════════════════════════════════════════════
+function renderHistory(){
+  const ms=document.getElementById('hist-months');
+  ms.innerHTML='';
+  for(let i=5;i>=0;i--){
+    const d=new Date(TODAY.getFullYear(),TODAY.getMonth()-i,1);
+    const m=mk(d);
+    const c=document.createElement('div');
+    c.className='m-chip'+(m===histMonth?' on':'');
+    c.textContent=`${MHI[d.getMonth()]} ${d.getFullYear()}`;
+    c.onclick=()=>{ histMonth=m; renderHistory(); };
+    ms.appendChild(c);
+  }
+  ms.scrollLeft=ms.scrollWidth;
+
+  const att=window._localCache.attendance;
+  const ot=window._localCache.ot;
+  const entries=Object.entries(att)
+    .filter(([k])=>k.startsWith(histMonth))
+    .sort(([a],[b])=>b.localeCompare(a));
+
+  const el=document.getElementById('full-hist');
+  if(!entries.length){
+    el.innerHTML='<div style="text-align:center;padding:36px;color:var(--text3);">इस महीने कोई रिकॉर्ड नहीं</div>';
+    return;
+  }
+  el.innerHTML=entries.map(([k,v])=>{
+    const info=SI[v.status];
+    const d=new Date(k+'T00:00:00');
+    const hrs=ot[k]?.hours;
+    return `<div class="hist-item" onclick="histEdit('${k}')">
+      <div class="hist-dot" style="background:${info.dot}"></div>
+      <div class="hist-info">
+        <div class="hist-date">${d.getDate()} ${MHI[d.getMonth()]} ${d.getFullYear()}</div>
+        <div class="hist-sub">${DHI[d.getDay()]}${hrs?' • '+hrs+'h OT':''}</div>
+        ${v.note?`<div class="hist-note">📝 ${v.note}</div>`:''}
+      </div>
+      <div class="hist-status" style="background:${info.bg};color:${info.col};">${info.lbl}</div>
+    </div>`;
+  }).join('');
+}
+
+function histEdit(key){
+  const att=window._localCache.attendance;
+  const sts=['present','absent','half','leave'];
+  const cur=att[key]?.status;
+  const curIdx=sts.indexOf(cur);
+  const note=att[key]?.note||'';
+  if(curIdx===sts.length-1){
+    delete att[key];
+    if(window._firebase?.isReady()&&window._firebase.getUser()) window._firebase.deleteAttendance(key);
+    showToast('एंट्री हटाई','rgba(120,120,120,.9)');
+  } else {
+    const next=sts[curIdx+1];
+    att[key]={status:next,note};
+    if(window._firebase?.isReady()&&window._firebase.getUser()) window._firebase.saveAttendance(key,next,note);
+    showToast(`बदला: ${SI[next].lbl}`,SI[next].dot);
+  }
+  LS_save(); renderHistory(); renderHome();
+}
+
+// ══════════════════════════════════════════════════
+//  SETTINGS
+// ══════════════════════════════════════════════════
+function renderSettings(){
+  const s=getSett();
+  document.getElementById('set-sal').textContent = s.salary>0?'₹'+fmt(s.salary):'—';
+  document.getElementById('set-wd').textContent  = s.workDays;
+}
+
+function saveSalary(){
+  const sal=parseFloat(document.getElementById('sal-inp').value)||0;
+  const otr=parseFloat(document.getElementById('ot-rate-inp').value)||50;
+  const s=getSett(); s.salary=sal; s.otRate=otr;
+  window._localCache.settings=s;
+  if(window._firebase?.isReady()&&window._firebase.getUser()) window._firebase.saveSettings(s);
+  LS_save(); closeModal('salary-modal');
+  showToast('💰 सेव!','#22c55e');
+  renderHome(); renderSettings();
+}
+
+function saveWorkDays(){
+  const wd=parseInt(document.getElementById('wd-inp').value)||26;
+  const s=getSett(); s.workDays=wd;
+  window._localCache.settings=s;
+  if(window._firebase?.isReady()&&window._firebase.getUser()) window._firebase.saveSettings(s);
+  LS_save(); closeModal('workdays-modal');
+  showToast('✅ सेव!','#22c55e');
+  renderHome(); renderSettings();
+}
+
+// ══════════════════════════════════════════════════
+//  EXPORT
+// ══════════════════════════════════════════════════
+function getReportText(){
+  const att=window._localCache.attendance;
+  const ot=window._localCache.ot;
+  const s=getSett();
+  const m=mk(TODAY);
+  const [yr,mo]=m.split('-');
+  let p=0,a=0,h=0,l=0,otT=0,advT=0;
+  Object.entries(att).forEach(([k,v])=>{
+    if(!k.startsWith(m)) return;
+    if(v.status==='present')p++;else if(v.status==='absent')a++;else if(v.status==='half')h++;else if(v.status==='leave')l++;
+  });
+  Object.entries(ot).forEach(([k,v])=>{ if(k.startsWith(m)) otT+=v.hours||0; });
+  Object.values(window._localCache.advances).forEach(adv=>{ if(adv.date?.startsWith(m)) advT+=adv.amount||0; });
+  const perDay=s.salary/s.workDays;
+  const baseE=(p*perDay)+(h*(perDay/2));
+  const otE=otT*(s.otRate||50);
+  const net=baseE+otE-advT;
+  const worked=p+h*0.5;
+  const pct=worked>0?Math.round((worked/(p+a+h+l))*100):0;
+  const name=currentUser?.name||'';
+  return `📋 हाजिरी रिपोर्ट${name?' — '+name:''}
+${MHI[parseInt(mo)-1]} ${yr}
+━━━━━━━━━━━━━━━━━
+✅ हाजिर: ${p} दिन
+❌ गैरहाजिर: ${a} दिन
+🌓 आधा दिन: ${h} दिन
+✈️ छुट्टी: ${l} दिन
+⏰ ओवरटाइम: ${otT} घंटे
+💳 एडवांस: ₹${fmt(advT)}
+━━━━━━━━━━━━━━━━━
+📊 उपस्थिति: ${pct}%
+💰 कुल कमाई: ₹${fmt(baseE+otE)}
+🤑 हाथ में: ₹${fmt(Math.max(0,net))}
+━━━━━━━━━━━━━━━━━
+📱 हाजिरी ऐप`;
+}
+
+function copyReport(){
+  const t=getReportText();
+  if(navigator.clipboard){ navigator.clipboard.writeText(t).then(()=>showToast('📋 Copy!','#22c55e')); }
+  else {
+    const ta=document.createElement('textarea');
+    ta.value=t; document.body.appendChild(ta); ta.select();
+    document.execCommand('copy'); document.body.removeChild(ta);
+    showToast('📋 Copy!','#22c55e');
+  }
+}
+function shareWA(){ window.open('https://wa.me/?text='+encodeURIComponent(getReportText()),'_blank'); }
+
+// ══════════════════════════════════════════════════
+//  DANGER
+// ══════════════════════════════════════════════════
+function clearMonth(){
+  if(!confirm(`${MHI[TODAY.getMonth()]} का डेटा मिटाएं?`)) return;
+  const att=window._localCache.attendance;
+  const ot=window._localCache.ot;
+  Object.keys(att).filter(k=>k.startsWith(todayMK)).forEach(k=>{
+    delete att[k];
+    if(window._firebase?.isReady()&&window._firebase.getUser()) window._firebase.deleteAttendance(k);
+  });
+  Object.keys(ot).filter(k=>k.startsWith(todayMK)).forEach(k=>delete ot[k]);
+  LS_save(); showToast('🗑️ मिटाया','#ef4444'); renderHome();
+}
+
+function clearAll(){
+  if(!confirm('सारा डेटा हमेशा के लिए मिट जाएगा!')) return;
+  window._localCache={attendance:{},ot:{},settings:{salary:0,otRate:50,workDays:26},advances:{}};
+  localStorage.removeItem('h_att'); localStorage.removeItem('h_ot');
+  localStorage.removeItem('h_adv');
+  showToast('⚠️ सब मिटाया','#ef4444'); renderHome();
+}
+
+// ══════════════════════════════════════════════════
+//  MODALS
+// ══════════════════════════════════════════════════
+function openModal(id){
+  if(id==='salary-modal'){
+    const s=getSett();
+    document.getElementById('sal-inp').value=s.salary||'';
+    document.getElementById('ot-rate-inp').value=s.otRate||'';
+  }
+  if(id==='workdays-modal') document.getElementById('wd-inp').value=getSett().workDays||26;
+  document.getElementById(id).classList.add('open');
+}
+function closeModal(id,e){
+  if(!e||e.target.id===id) document.getElementById(id).classList.remove('open');
+}
+
+// ══════════════════════════════════════════════════
+//  TOAST
+// ══════════════════════════════════════════════════
+function showToast(msg, col='var(--accent)'){
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.style.background=col+'cc';
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),2200);
+}
+
+// ══════════════════════════════════════════════════
+//  INIT
+// ══════════════════════════════════════════════════
+LS_load(); // Always load local data first
+
+// Check Firebase readiness & sync status
+setTimeout(()=>{
+  const sb = document.getElementById('sync-status-bar');
+  if(window._firebase && window._firebase.isReady()){
+    sb.innerHTML='<div class="sync-dot"></div>Firebase तैयार — Login करें';
+    sb.style.color='var(--green)';
+  } else {
+    sb.innerHTML='<div class="sync-dot offline-dot"></div>Firebase Config नहीं मिला — Offline उपयोग करें';
+    sb.style.color='var(--yellow)';
+  }
+}, 1500);
+
+// Auto-restore session
+const sess = getSavedSession();
+if(sess){
+  currentUser = { phone: sess.phone, name: sess.name };
+  if(window._firebase && window._firebase.isReady()){
+    // Will be verified in background
+    startSync(sess.phone, sess.name);
+  }
+  enterApp();
+} else {
+  // Show login
+  document.getElementById('login-screen').style.display='flex';
+}
+</script>
+</body>
+</html>
