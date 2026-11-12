@@ -1,0 +1,8 @@
+{
+  "name": "हाजिरी",
+  "description": "दैनिक हाजिरी, ओवरटाइम, तनख्वाह और एडवांस का हिसाब-किताब",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
