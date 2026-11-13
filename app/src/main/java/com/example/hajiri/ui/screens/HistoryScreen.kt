@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.hajiri.model.AttendanceStatus
 import com.example.hajiri.ui.components.GlassCard
+import com.example.hajiri.ui.components.MonthSelectorWithPickerRow
 import com.example.hajiri.ui.theme.LocalHajiriPalette
 import com.example.hajiri.ui.theme.StatusBlue
 import com.example.hajiri.ui.theme.StatusBlueBg
@@ -45,7 +46,6 @@ import com.example.hajiri.ui.theme.StatusYellow
 import com.example.hajiri.ui.theme.StatusYellowBg
 import com.example.hajiri.util.DateUtils
 import com.example.hajiri.viewmodel.HajiriViewModel
-import java.time.YearMonth
 
 @Composable
 fun HistoryScreen(
@@ -53,6 +53,8 @@ fun HistoryScreen(
     modifier: Modifier = Modifier
 ) {
     val selectedMonth by viewModel.selectedHistoryMonth.collectAsState()
+    val currentMonthKey by viewModel.todayMonthKeyState.collectAsState()
+    val earliestYear by viewModel.earliestDataYear.collectAsState()
     val attendance by viewModel.attendance.collectAsState()
     val otHours by viewModel.otHours.collectAsState()
     val palette = LocalHajiriPalette.current
@@ -88,46 +90,22 @@ fun HistoryScreen(
             }
         }
 
-        // Horizontal Month Selector
+        // Horizontal Month Selector + Month-Year Picker (unrestricted history)
         item {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                val now = YearMonth.now()
-                for (i in 5 downTo 0) {
-                    val ym = now.minusMonths(i.toLong())
-                    val mKey = ym.toString()
-                    val isSelected = mKey == selectedMonth
-                    val label = DateUtils.formatHindiMonthYear(ym)
-
-                    Surface(
-                        shape = RoundedCornerShape(50),
-                        color = if (isSelected) palette.accent else palette.glassCardHigh,
-                        border = BorderStroke(1.dp, if (isSelected) palette.accent else palette.glassBorderMid),
-                        modifier = Modifier
-                            .shadow(if (isSelected) 6.dp else 2.dp, RoundedCornerShape(50), spotColor = palette.accent.copy(alpha = 0.18f))
-                            .clickable { viewModel.setHistoryMonth(mKey) }
-                    ) {
-                        Text(
-                            text = label,
-                            fontSize = 12.sp,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                            color = if (isSelected) Color.White else palette.textSecondary,
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
-                        )
-                    }
-                }
-            }
+            MonthSelectorWithPickerRow(
+                selectedMonth = selectedMonth,
+                currentMonthKey = currentMonthKey,
+                earliestYear = earliestYear,
+                testTagPrefix = "history",
+                onSelectMonth = { viewModel.setHistoryMonth(it) }
+            )
         }
 
         if (monthEntries.isEmpty()) {
             item {
                 GlassCard {
                     Text(
-                        text = "इस महीने कोई रिकॉर्ड नहीं",
+                        text = "${DateUtils.formatHindiMonthYear(selectedMonth)} में कोई रिकॉर्ड नहीं",
                         color = palette.textMuted,
                         fontSize = 13.sp,
                         modifier = Modifier
@@ -191,16 +169,24 @@ fun HistoryScreen(
                             }
                         }
 
-                        Surface(
-                            shape = RoundedCornerShape(50),
-                            color = bgCol
-                        ) {
+                        Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Surface(
+                                shape = RoundedCornerShape(50),
+                                color = bgCol
+                            ) {
+                                Text(
+                                    text = entry.value.status.labelHindi,
+                                    color = textCol,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                                )
+                            }
                             Text(
-                                text = entry.value.status.labelHindi,
-                                color = textCol,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                                text = "✏️ बदलें / OT",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = palette.accent
                             )
                         }
                     }

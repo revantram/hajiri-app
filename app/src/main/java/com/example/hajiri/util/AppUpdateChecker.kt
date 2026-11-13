@@ -91,9 +91,9 @@ object AppUpdateChecker {
                 @Suppress("DEPRECATION")
                 pkgManager.getPackageInfo(context.packageName, 0)
             }
-            pkgInfo.versionName?.ifBlank { "1.2" } ?: "1.2"
+            pkgInfo.versionName?.ifBlank { "1.3" } ?: "1.3"
         } catch (_: Exception) {
-            "1.2"
+            "1.3"
         }
     }
 

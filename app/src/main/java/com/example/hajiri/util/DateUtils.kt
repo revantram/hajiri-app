@@ -82,7 +82,7 @@ object DateUtils {
         var best = 0
         var cur = 0
 
-        val today = LocalDate.now()
+        val today = parseDateKey(todayKey) ?: LocalDate.now()
         // Check past 365 days going backward from yesterday
         for (i in 1..365) {
             val d = today.minusDays(i.toLong())

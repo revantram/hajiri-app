@@ -56,7 +56,7 @@ fun CalendarScreen(
     val palette = LocalHajiriPalette.current
     val calendarMonth by viewModel.calendarMonth.collectAsState()
     val attendance by viewModel.attendance.collectAsState()
-    val todayKey = viewModel.todayKey
+    val todayKey by viewModel.todayKeyState.collectAsState()
 
     val year = calendarMonth.year
     val month = calendarMonth.monthValue

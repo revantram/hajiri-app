@@ -58,6 +58,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.hajiri.ui.components.GlassCard
+import com.example.hajiri.ui.components.MonthSelectorWithPickerRow
 import com.example.hajiri.ui.components.outlinedFieldColors
 import com.example.hajiri.ui.theme.AdvancePink
 import com.example.hajiri.ui.theme.LocalHajiriPalette
@@ -83,6 +84,8 @@ fun ReportsScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val selectedMonth by viewModel.selectedReportMonth.collectAsState()
+    val currentMonthKey by viewModel.todayMonthKeyState.collectAsState()
+    val earliestYear by viewModel.earliestDataYear.collectAsState()
     val stats by viewModel.reportStats.collectAsState()
     val trends by viewModel.sixMonthTrends.collectAsState()
     val currentUser by viewModel.currentUser.collectAsState()
@@ -112,7 +115,7 @@ fun ReportsScreen(
             val saved = withContext(Dispatchers.IO) {
                 runCatching {
                     context.contentResolver.openOutputStream(uri)?.use { out ->
-                        SalarySlipPdfGenerator.writePdf(slipData, out)
+                        SalarySlipPdfGenerator.writePdf(slipData, out, context)
                     } ?: error("Output stream unavailable")
                 }.isSuccess
             }
@@ -156,38 +159,14 @@ fun ReportsScreen(
             }
         }
 
-        // Horizontal Month Chips (Last 6 Months)
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            val now = YearMonth.now()
-            for (i in 5 downTo 0) {
-                val ym = now.minusMonths(i.toLong())
-                val mKey = ym.toString()
-                val isSelected = mKey == selectedMonth
-                val label = DateUtils.formatHindiMonthYear(ym)
-
-                Surface(
-                    shape = RoundedCornerShape(50),
-                    color = if (isSelected) palette.accent else palette.glassCardHigh,
-                    border = BorderStroke(1.dp, if (isSelected) palette.accent else palette.glassBorderMid),
-                    modifier = Modifier
-                        .shadow(if (isSelected) 6.dp else 2.dp, RoundedCornerShape(50), spotColor = palette.accent.copy(alpha = 0.18f))
-                        .clickable { viewModel.setReportMonth(mKey) }
-                ) {
-                    Text(
-                        text = label,
-                        fontSize = 12.sp,
-                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                        color = if (isSelected) Color.White else palette.textSecondary,
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
-                    )
-                }
-            }
-        }
+        // Month Selector Chips + Month-Year Picker (unrestricted history)
+        MonthSelectorWithPickerRow(
+            selectedMonth = selectedMonth,
+            currentMonthKey = currentMonthKey,
+            earliestYear = earliestYear,
+            testTagPrefix = "reports",
+            onSelectMonth = { viewModel.setReportMonth(it) }
+        )
 
         // Attendance Percentage Ring Card
         GlassCard {
@@ -210,8 +189,11 @@ fun ReportsScreen(
                         fontWeight = FontWeight.ExtraBold,
                         color = palette.textPrimary
                     )
+                    val totalMonthDays = remember(selectedMonth) {
+                        runCatching { YearMonth.parse(selectedMonth).lengthOfMonth() }.getOrDefault(30)
+                    }
                     Text(
-                        text = "${stats.workedDays} दिन काम किए",
+                        text = "${SalarySlipPdfGenerator.formatFloatDays(stats.workedDays)} / $totalMonthDays दिन काम किए",
                         fontSize = 13.sp,
                         color = palette.accent,
                         fontWeight = FontWeight.Bold

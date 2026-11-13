@@ -70,6 +70,30 @@
           "items": { "type": "string" },
           "description": "List of YYYY-MM month keys whose remaining salary has already been received/paid"
         },
+        "monthPayments": {
+          "type": "object",
+          "description": "Map of YYYY-MM month keys to total INR amount already received (supports partial and full payments)"
+        },
+        "activeSiteId": {
+          "type": "string",
+          "description": "Currently selected work site / contractor ID"
+        },
+        "sites": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "name": { "type": "string" },
+              "wageMode": { "type": "string" },
+              "salary": { "type": "number" },
+              "dailyWage": { "type": "number" },
+              "otRate": { "type": "number" },
+              "workDays": { "type": "integer" }
+            }
+          },
+          "description": "Saved contractor sites / jobs with separate wage rates"
+        },
         "createdAt": {
           "type": "string",
           "format": "date-time",
@@ -97,6 +121,10 @@
           "type": "string",
           "description": "Optional daily note"
         },
+        "siteId": {
+          "type": "string",
+          "description": "Optional work site / contractor ID"
+        },
         "createdAt": {
           "type": "string",
           "format": "date-time",
@@ -118,6 +146,10 @@
         "hours": {
           "type": "number",
           "description": "Overtime hours worked on that date"
+        },
+        "siteId": {
+          "type": "string",
+          "description": "Optional work site / contractor ID"
         },
         "createdAt": {
           "type": "string",
@@ -148,6 +180,10 @@
         "dateKey": {
           "type": "string",
           "description": "Date of advance in YYYY-MM-DD format"
+        },
+        "siteId": {
+          "type": "string",
+          "description": "Optional work site / contractor ID"
         },
         "createdAt": {
           "type": "string",

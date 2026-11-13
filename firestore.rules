@@ -63,6 +63,9 @@ service cloud.firestore {
              data.workDays <= 31 &&
              (!('themeStyle' in data) || (data.themeStyle is string && data.themeStyle in ['liquid_light', 'ocean_glass', 'rose_gold', 'liquid_dark'])) &&
              (!('settledMonths' in data) || (data.settledMonths is list && data.settledMonths.size() <= 120)) &&
+             (!('monthPayments' in data) || (data.monthPayments is map && data.monthPayments.size() <= 120)) &&
+             (!('activeSiteId' in data) || (data.activeSiteId is string && data.activeSiteId.size() <= 64)) &&
+             (!('sites' in data) || (data.sites is list && data.sites.size() <= 30)) &&
              data.createdAt is timestamp &&
              data.createdAt <= request.time &&
              data.updatedAt is timestamp &&
@@ -74,6 +77,7 @@ service cloud.firestore {
              data.status in ['present', 'absent', 'half', 'leave'] &&
              data.note is string &&
              data.note.size() <= 500 &&
+             (!('siteId' in data) || (data.siteId is string && data.siteId.size() <= 64)) &&
              data.createdAt is timestamp &&
              data.createdAt <= request.time &&
              data.updatedAt is timestamp &&
@@ -84,6 +88,7 @@ service cloud.firestore {
       return (data.hours is int || data.hours is float) &&
              data.hours > 0 &&
              data.hours <= 24 &&
+             (!('siteId' in data) || (data.siteId is string && data.siteId.size() <= 64)) &&
              data.createdAt is timestamp &&
              data.createdAt <= request.time &&
              data.updatedAt is timestamp &&
@@ -97,6 +102,7 @@ service cloud.firestore {
              data.reason is string &&
              data.reason.size() <= 200 &&
              isValidDateKey(data.dateKey) &&
+             (!('siteId' in data) || (data.siteId is string && data.siteId.size() <= 64)) &&
              data.createdAt is timestamp &&
              data.createdAt <= request.time &&
              data.updatedAt is timestamp &&
@@ -134,14 +140,14 @@ service cloud.firestore {
                          isValidUserSettings(incoming()) &&
                          request.auth.uid == userId &&
                          incoming().keys().hasAll(['salary', 'otRate', 'workDays', 'createdAt', 'updatedAt']) &&
-                         incoming().keys().hasOnly(['salary', 'dailyWage', 'wageMode', 'otRate', 'workDays', 'themeStyle', 'settledMonths', 'createdAt', 'updatedAt']);
+                         incoming().keys().hasOnly(['salary', 'dailyWage', 'wageMode', 'otRate', 'workDays', 'themeStyle', 'settledMonths', 'monthPayments', 'activeSiteId', 'sites', 'createdAt', 'updatedAt']);
 
         allow update: if isSignedIn() &&
                          isValidId(settingId) &&
                          isValidUserSettings(incoming()) &&
                          request.auth.uid == userId &&
                          incoming().createdAt == existing().createdAt &&
-                         incoming().diff(existing()).affectedKeys().hasOnly(['salary', 'dailyWage', 'wageMode', 'otRate', 'workDays', 'themeStyle', 'settledMonths', 'updatedAt']);
+                         incoming().diff(existing()).affectedKeys().hasOnly(['salary', 'dailyWage', 'wageMode', 'otRate', 'workDays', 'themeStyle', 'settledMonths', 'monthPayments', 'activeSiteId', 'sites', 'updatedAt']);
 
         allow delete: if isOwner(userId) && isValidId(settingId);
       }
@@ -157,7 +163,7 @@ service cloud.firestore {
                          isValidAttendanceRecord(incoming()) &&
                          request.auth.uid == userId &&
                          incoming().keys().hasAll(['status', 'note', 'createdAt', 'updatedAt']) &&
-                         incoming().keys().hasOnly(['status', 'note', 'createdAt', 'updatedAt']);
+                         incoming().keys().hasOnly(['status', 'note', 'siteId', 'createdAt', 'updatedAt']);
 
         allow update: if isSignedIn() &&
                          isValidId(dateKey) &&
@@ -165,7 +171,7 @@ service cloud.firestore {
                          isValidAttendanceRecord(incoming()) &&
                          request.auth.uid == userId &&
                          incoming().createdAt == existing().createdAt &&
-                         incoming().diff(existing()).affectedKeys().hasOnly(['status', 'note', 'updatedAt']);
+                         incoming().diff(existing()).affectedKeys().hasOnly(['status', 'note', 'siteId', 'updatedAt']);
 
         allow delete: if isOwner(userId) && isValidId(dateKey) && isValidDateKey(dateKey);
       }
@@ -181,7 +187,7 @@ service cloud.firestore {
                          isValidOvertimeRecord(incoming()) &&
                          request.auth.uid == userId &&
                          incoming().keys().hasAll(['hours', 'createdAt', 'updatedAt']) &&
-                         incoming().keys().hasOnly(['hours', 'createdAt', 'updatedAt']);
+                         incoming().keys().hasOnly(['hours', 'siteId', 'createdAt', 'updatedAt']);
 
         allow update: if isSignedIn() &&
                          isValidId(dateKey) &&
@@ -189,7 +195,7 @@ service cloud.firestore {
                          isValidOvertimeRecord(incoming()) &&
                          request.auth.uid == userId &&
                          incoming().createdAt == existing().createdAt &&
-                         incoming().diff(existing()).affectedKeys().hasOnly(['hours', 'updatedAt']);
+                         incoming().diff(existing()).affectedKeys().hasOnly(['hours', 'siteId', 'updatedAt']);
 
         allow delete: if isOwner(userId) && isValidId(dateKey) && isValidDateKey(dateKey);
       }
@@ -204,14 +210,14 @@ service cloud.firestore {
                          isValidAdvanceRecord(incoming()) &&
                          request.auth.uid == userId &&
                          incoming().keys().hasAll(['amount', 'reason', 'dateKey', 'createdAt', 'updatedAt']) &&
-                         incoming().keys().hasOnly(['amount', 'reason', 'dateKey', 'createdAt', 'updatedAt']);
+                         incoming().keys().hasOnly(['amount', 'reason', 'dateKey', 'siteId', 'createdAt', 'updatedAt']);
 
         allow update: if isSignedIn() &&
                          isValidId(advanceId) &&
                          isValidAdvanceRecord(incoming()) &&
                          request.auth.uid == userId &&
                          incoming().createdAt == existing().createdAt &&
-                         incoming().diff(existing()).affectedKeys().hasOnly(['amount', 'reason', 'dateKey', 'updatedAt']);
+                         incoming().diff(existing()).affectedKeys().hasOnly(['amount', 'reason', 'dateKey', 'siteId', 'updatedAt']);
 
         allow delete: if isOwner(userId) && isValidId(advanceId);
       }

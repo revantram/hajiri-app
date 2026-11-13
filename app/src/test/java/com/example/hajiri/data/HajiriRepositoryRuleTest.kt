@@ -56,30 +56,56 @@ class HajiriRepositoryRuleTest : FirestoreEmulatorTestBase() {
         val reason = "टेस्ट एडवांस ${UUID.randomUUID().toString().take(6)}"
 
         withTimeout(DEFAULT_TIMEOUT_MS) {
-            repository.saveSettings(
-                salary = 24000.0,
-                dailyWage = 900.0,
-                wageMode = com.example.hajiri.model.WageMode.DAILY.id,
-                otRate = 120.0,
-                workDays = 26,
-                themeStyle = com.example.hajiri.model.AppThemeStyle.OCEAN_GLASS.id
+            repository.saveSitesAndActiveSite(
+                sites = listOf(
+                    com.example.hajiri.model.WorkSite(
+                        id = "default",
+                        name = "मुख्य साइट",
+                        wageMode = com.example.hajiri.model.WageMode.DAILY.id,
+                        dailyWage = 900.0,
+                        otRate = 120.0,
+                        workDays = 26
+                    ),
+                    com.example.hajiri.model.WorkSite(
+                        id = "site_metro",
+                        name = "मेट्रो साइट",
+                        wageMode = com.example.hajiri.model.WageMode.DAILY.id,
+                        dailyWage = 1100.0,
+                        otRate = 150.0,
+                        workDays = 26
+                    )
+                ),
+                activeSiteId = "site_metro"
             )
             repository.saveThemeStyle(com.example.hajiri.model.AppThemeStyle.ROSE_GOLD)
-            repository.addOvertime(dateKey, 2.5f)
+            repository.addOvertime(dateKey, 2.5f, siteId = "site_metro")
         }
         val advId = withTimeout(DEFAULT_TIMEOUT_MS) {
-            repository.addAdvance(amount = 1500.0, reason = reason, dateKey = dateKey)
+            repository.addAdvance(
+                amount = 1500.0,
+                reason = reason,
+                dateKey = "2026-11-05",
+                siteId = "site_metro"
+            )
         }
 
         val settings = withTimeout(FLOW_TIMEOUT_MS) {
             repository.observeSettings(uid).first {
-                it.salary == 24000.0 && it.themeStyle == com.example.hajiri.model.AppThemeStyle.ROSE_GOLD.id
+                it.activeSiteId == "site_metro" && it.sites.size == 2 && it.themeStyle == com.example.hajiri.model.AppThemeStyle.ROSE_GOLD.id
             }
         }
-        assertEquals(900.0, settings.dailyWage, 0.01)
+        assertEquals(1100.0, settings.dailyWage, 0.01)
         assertEquals(com.example.hajiri.model.WageMode.DAILY.id, settings.wageMode)
-        assertEquals(120.0, settings.otRate, 0.01)
+        assertEquals(150.0, settings.otRate, 0.01)
         assertEquals(26, settings.workDays)
+
+        withTimeout(DEFAULT_TIMEOUT_MS) {
+            repository.setMonthPayment("2026-10", paidAmount = 10000.0, isSettled = false)
+        }
+        val partialSettings = withTimeout(FLOW_TIMEOUT_MS) {
+            repository.observeSettings(uid).first { (it.monthPayments["2026-10"] ?: 0.0) == 10000.0 }
+        }
+        assertEquals(10000.0, partialSettings.monthPayments["2026-10"] ?: 0.0, 0.01)
 
         withTimeout(DEFAULT_TIMEOUT_MS) {
             repository.setMonthSettled("2026-10", true)
@@ -102,10 +128,26 @@ class HajiriRepositoryRuleTest : FirestoreEmulatorTestBase() {
         }
         assertTrue((overtime[dateKey] ?: 0f) >= 2.5f)
 
+        withTimeout(DEFAULT_TIMEOUT_MS) {
+            repository.setOvertime(dateKey, 1.5f, siteId = "site_metro")
+        }
+        val updatedOt = withTimeout(FLOW_TIMEOUT_MS) {
+            repository.observeOvertime(uid).first { (it[dateKey] ?: 0f) == 1.5f }
+        }
+        assertEquals(1.5f, updatedOt[dateKey] ?: 0f, 0.01f)
+
+        withTimeout(DEFAULT_TIMEOUT_MS) {
+            repository.setOvertime(dateKey, 0f)
+        }
+        val clearedOt = withTimeout(FLOW_TIMEOUT_MS) {
+            repository.observeOvertime(uid).first { !it.containsKey(dateKey) }
+        }
+        assertNull(clearedOt[dateKey])
+
         val advances = withTimeout(FLOW_TIMEOUT_MS) {
             repository.observeAdvances(uid).first { list -> list.any { it.id == advId } }
         }
-        assertTrue(advances.any { it.id == advId && it.reason == reason })
+        assertTrue(advances.any { it.id == advId && it.reason == reason && it.dateKey == "2026-11-05" && it.siteId == "site_metro" })
 
         withTimeout(DEFAULT_TIMEOUT_MS) {
             repository.deleteAdvance(advId)

@@ -47,12 +47,20 @@ import com.example.hajiri.ui.theme.StatusGreen
 import com.example.hajiri.ui.theme.StatusGreenBg
 import com.example.hajiri.ui.theme.StatusRed
 import com.example.hajiri.ui.theme.StatusRedBg
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import com.example.hajiri.util.AppUpdateChecker
 import com.example.hajiri.util.DateUtils
 import com.example.hajiri.util.UpdateCheckState
 import com.example.hajiri.viewmodel.HajiriViewModel
+import com.example.hajiri.viewmodel.SyncStatus
+import com.example.hajiri.widget.HajiriWidgetManager
 
 @Composable
 fun SettingsScreen(
@@ -69,8 +77,24 @@ fun SettingsScreen(
     val installedVersion by viewModel.installedVersionName.collectAsState()
     val updateRepoSlug by viewModel.updateRepoSlug.collectAsState()
     val updateState by viewModel.updateCheckState.collectAsState()
-    val activeWageMode = WageMode.fromId(settings.wageMode)
+    val reminderEnabled by viewModel.reminderEnabled.collectAsState()
+    val reminderHour by viewModel.reminderHour.collectAsState()
+    val syncStatus by viewModel.syncStatus.collectAsState()
+
+    val sitesList = viewModel.resolveSitesList(settings)
+    val activeSite = viewModel.getActiveSite(settings)
+    val activeWageMode = WageMode.fromId(activeSite.wageMode)
     val activeTheme = AppThemeStyle.fromId(settings.themeStyle)
+
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            viewModel.setDailyReminder(context, enabled = true, hourOfDay = reminderHour)
+        } else {
+            viewModel.showMessage("⚠️ रिमाइंडर के लिए नोटिफिकेशन अनुमति जरूरी है")
+        }
+    }
 
     Column(
         modifier = modifier
@@ -129,10 +153,15 @@ fun SettingsScreen(
                         }
                     }
 
+                    val (badgeBg, badgeColor) = when (syncStatus) {
+                        SyncStatus.OFFLINE_SAVED -> com.example.hajiri.ui.theme.OtOrangeBg to com.example.hajiri.ui.theme.OtOrange
+                        SyncStatus.SYNCING_PENDING -> palette.accent.copy(alpha = 0.14f) to palette.accent
+                        SyncStatus.SYNCED -> StatusGreenBg to StatusGreen
+                    }
                     Surface(
                         shape = RoundedCornerShape(50),
-                        color = StatusGreenBg,
-                        border = BorderStroke(1.dp, StatusGreen.copy(alpha = 0.3f))
+                        color = badgeBg,
+                        border = BorderStroke(1.dp, badgeColor.copy(alpha = 0.35f))
                     ) {
                         Row(
                             modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
@@ -142,13 +171,17 @@ fun SettingsScreen(
                             Box(
                                 modifier = Modifier
                                     .size(7.dp)
-                                    .background(StatusGreen, CircleShape)
+                                    .background(badgeColor, CircleShape)
                             )
                             Text(
-                                text = "क्लाउड सिंक ✓",
+                                text = when (syncStatus) {
+                                    SyncStatus.OFFLINE_SAVED -> "ऑफ़लाइन सेव ✓"
+                                    SyncStatus.SYNCING_PENDING -> "सिंक हो रहा..."
+                                    SyncStatus.SYNCED -> "क्लाउड सिंक ✓"
+                                },
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = StatusGreen
+                                color = badgeColor
                             )
                         }
                     }
@@ -270,12 +303,17 @@ fun SettingsScreen(
 
                 HorizontalDivider(color = palette.divider)
 
+                val isAutoWorkDays = activeSite.workDays !in 1..31 || activeSite.workDays == 26
                 SettingsOptionRow(
                     iconText = "📅",
                     iconBg = StatusGreenBg,
                     title = "काम के दिन",
-                    subtitle = "महीने में कुल कार्यदिवस",
-                    valueText = "${settings.workDays} दिन",
+                    subtitle = if (isAutoWorkDays) {
+                        "महीने के पूरे दिन (28/29/30/31) अपने आप"
+                    } else {
+                        "महीने में कस्टम कार्यदिवस"
+                    },
+                    valueText = if (isAutoWorkDays) "ऑटो (30/31)" else "${activeSite.workDays} दिन",
                     onClick = { viewModel.showWorkDaysDialog.value = true },
                     modifier = Modifier.testTag("open_workdays_settings_btn")
                 )
@@ -307,15 +345,124 @@ fun SettingsScreen(
                 HorizontalDivider(color = palette.divider)
 
                 SettingsOptionRow(
+                    iconText = "🏗️",
+                    iconBg = palette.accent.copy(alpha = 0.14f),
+                    title = "काम / साइट व अलग-अलग रेट",
+                    subtitle = "कई ठेकेदार या साइट जोड़ें (${sitesList.size} साइट)",
+                    valueText = activeSite.name.take(14),
+                    onClick = { viewModel.showSitesDialog.value = true },
+                    modifier = Modifier.testTag("open_sites_settings_btn")
+                )
+
+                HorizontalDivider(color = palette.divider)
+
+                SettingsOptionRow(
                     iconText = "💼",
                     iconBg = OtOrangeBg,
                     title = "पिछले महीने के बाकी",
-                    subtitle = "बकाया पैसा मिला या नहीं चुनें (नहीं मिला तो सैलरी में जुड़ेगा)",
+                    subtitle = "बकाया या आंशिक भुगतान (Partial Paid) दर्ज करें",
                     valueText = "देखें",
                     onClick = { viewModel.showPrevBalanceDialog.value = true },
                     modifier = Modifier.testTag("open_prev_balance_settings_btn")
                 )
 
+                HorizontalDivider(color = palette.divider)
+
+                SettingsOptionRow(
+                    iconText = "🧩",
+                    iconBg = StatusGreenBg,
+                    title = "होम स्क्रीन विजेट जोड़ें",
+                    subtitle = "ऐप खोले बिना 1-टैप में P / A / HD लगाएं",
+                    valueText = "पिन करें",
+                    onClick = {
+                        val requested = HajiriWidgetManager.requestPinWidget(context)
+                        if (requested) {
+                            viewModel.showMessage("🧩 होम स्क्रीन विजेट पिन करने का पॉपअप खोला गया")
+                        } else {
+                            viewModel.showMessage("📱 होम स्क्रीन दबाकर रखें → Widgets → हाजिरी जोड़ें")
+                        }
+                    },
+                    modifier = Modifier.testTag("pin_widget_settings_btn")
+                )
+            }
+        }
+
+        // Daily Attendance Reminder Card
+        GlassCard {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "🔔 दैनिक हाजिरी रिमाइंडर",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = palette.textPrimary
+                        )
+                        Text(
+                            text = "यदि आज की हाजिरी न लगी हो तो रोज़ याद दिलाएं",
+                            fontSize = 11.sp,
+                            color = palette.textMuted
+                        )
+                    }
+                    Switch(
+                        checked = reminderEnabled,
+                        onCheckedChange = { wantEnable ->
+                            if (!wantEnable) {
+                                viewModel.setDailyReminder(context, enabled = false)
+                            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                                ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+                            ) {
+                                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                            } else {
+                                viewModel.setDailyReminder(context, enabled = true, hourOfDay = reminderHour)
+                            }
+                        },
+                        modifier = Modifier.testTag("daily_reminder_switch")
+                    )
+                }
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(palette.segmentedTrackBg, RoundedCornerShape(12.dp))
+                        .padding(4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    listOf(20 to "🌙 रात 8:00 बजे", 21 to "🌙 रात 9:00 बजे").forEach { (hour, label) ->
+                        val selected = reminderHour == hour
+                        Surface(
+                            shape = RoundedCornerShape(9.dp),
+                            color = if (selected) palette.accent else Color.Transparent,
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable {
+                                    if (reminderEnabled) {
+                                        viewModel.setDailyReminder(context, enabled = true, hourOfDay = hour)
+                                    } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                                        ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+                                    ) {
+                                        viewModel.setDailyReminder(context, enabled = false, hourOfDay = hour)
+                                    } else {
+                                        viewModel.setDailyReminder(context, enabled = true, hourOfDay = hour)
+                                    }
+                                }
+                                .testTag("reminder_hour_${hour}_btn")
+                        ) {
+                            Text(
+                                text = if (selected) "✓ $label" else label,
+                                color = if (selected) Color.White else palette.textSecondary,
+                                fontSize = 12.sp,
+                                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.padding(vertical = 8.dp)
+                            )
+                        }
+                    }
+                }
             }
         }
 

@@ -28,6 +28,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -45,7 +46,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.credentials.CredentialManager
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.Companion.APPLICATION_KEY
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
@@ -64,6 +68,7 @@ import com.example.hajiri.ui.components.PhoneProfileDialog
 import com.example.hajiri.ui.components.SalaryDialog
 import com.example.hajiri.ui.components.ThemePickerDialog
 import com.example.hajiri.ui.components.WorkDaysDialog
+import com.example.hajiri.ui.components.WorkSitesDialog
 import com.example.hajiri.ui.screens.AuthScreen
 import com.example.hajiri.ui.screens.CalendarScreen
 import com.example.hajiri.ui.screens.HistoryScreen
@@ -72,8 +77,11 @@ import com.example.hajiri.ui.screens.ReportsScreen
 import com.example.hajiri.ui.screens.SettingsScreen
 import com.example.hajiri.ui.theme.HajiriTheme
 import com.example.hajiri.ui.theme.LocalHajiriPalette
+import com.example.hajiri.util.DailyReminderScheduler
+import com.example.hajiri.util.NetworkConnectivityObserver
 import com.example.hajiri.viewmodel.HajiriTab
 import com.example.hajiri.viewmodel.HajiriViewModel
+import com.example.hajiri.widget.HajiriWidgetManager
 import com.google.firebase.Firebase
 import com.google.firebase.auth.auth
 import com.google.firebase.firestore.FirebaseFirestore
@@ -116,7 +124,12 @@ fun AppContent() {
                         }
                         val databaseId = app.getString(R.string.firestore_database_id)
                         val db = FirebaseFirestore.getInstance(databaseId)
-                        HajiriViewModel(HajiriRepository(db, auth), uid)
+                        val connectivityObserver = NetworkConnectivityObserver(app)
+                        HajiriViewModel(
+                            repository = HajiriRepository(db, auth),
+                            currentUserId = uid,
+                            isOnlineFlow = connectivityObserver.isOnlineFlow
+                        )
                     }
                 }
             )
@@ -127,6 +140,7 @@ fun AppContent() {
                     email = user.email ?: ""
                 )
                 viewModel.initUpdateState(context)
+                viewModel.initReminderState(context)
             }
 
             val settings by viewModel.settings.collectAsState()
@@ -153,6 +167,8 @@ fun MainApp(
     val currentTab by viewModel.currentTab.collectAsState()
     val settings by viewModel.settings.collectAsState()
     val attendance by viewModel.attendance.collectAsState()
+    val otHours by viewModel.otHours.collectAsState()
+    val homeStats by viewModel.homeStats.collectAsState()
     val currentUser by viewModel.currentUser.collectAsState()
     val syncError by viewModel.syncError.collectAsState()
     val selectedCalendarDateKey by viewModel.selectedCalendarDateKey.collectAsState()
@@ -166,6 +182,7 @@ fun MainApp(
     val showTheme by viewModel.showThemeDialog.collectAsState()
     val showUpdate by viewModel.showUpdateDialog.collectAsState()
     val showPrevBalance by viewModel.showPrevBalanceDialog.collectAsState()
+    val showSites by viewModel.showSitesDialog.collectAsState()
     val previousMonthsSummary by viewModel.previousMonthsSummary.collectAsState()
     val autoUpdateEnabled by viewModel.autoUpdateCheckEnabled.collectAsState()
     val installedVersion by viewModel.installedVersionName.collectAsState()
@@ -173,7 +190,37 @@ fun MainApp(
     val updateState by viewModel.updateCheckState.collectAsState()
 
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     val snackbarHostState = remember { SnackbarHostState() }
+    val activeSite = viewModel.getActiveSite(settings)
+    val todayKey by viewModel.todayKeyState.collectAsState()
+    val todayRecord = attendance[todayKey]
+
+    DisposableEffect(lifecycleOwner, viewModel) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                viewModel.refreshTodayDate()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
+    LaunchedEffect(todayKey, homeStats, todayRecord, activeSite.id, activeSite.name) {
+        DailyReminderScheduler.recordTodayAttendanceStatus(context, todayKey, todayRecord != null)
+        HajiriWidgetManager.syncFromApp(
+            context = context,
+            todayKey = todayKey,
+            todayStatus = todayRecord?.status,
+            totalMonthlyEarnings = homeStats.baseEarnings + homeStats.otEarnings,
+            workedDays = homeStats.workedDays,
+            activeSiteId = activeSite.id,
+            activeSiteName = activeSite.name,
+            isSignedIn = true
+        )
+    }
 
     LaunchedEffect(Unit) {
         viewModel.toastEvent.collect { message ->
@@ -248,25 +295,27 @@ fun MainApp(
         val calDate = selectedCalendarDateKey
         if (calDate != null) {
             val existingRecord = attendance[calDate]
+            val existingOt = otHours[calDate] ?: 0f
             CalendarDayDialog(
                 dateKey = calDate,
                 initialStatus = existingRecord?.status,
                 initialNote = existingRecord?.note ?: "",
+                initialOtHours = existingOt,
                 hasExistingRecord = existingRecord != null,
                 onDismiss = { viewModel.closeCalendarDayDialog() },
                 onClear = { viewModel.clearCalendarDayAttendance(calDate) },
-                onSave = { status, note ->
-                    viewModel.saveCalendarDayAttendance(calDate, status, note)
+                onSave = { status, note, otVal ->
+                    viewModel.saveCalendarDayAttendance(calDate, status, note, otVal)
                 }
             )
         }
 
         if (showSalary) {
             SalaryDialog(
-                initialSalary = settings.salary,
-                initialDailyWage = settings.dailyWage,
-                initialWageMode = WageMode.fromId(settings.wageMode),
-                initialOtRate = settings.otRate,
+                initialSalary = activeSite.salary,
+                initialDailyWage = activeSite.dailyWage,
+                initialWageMode = WageMode.fromId(activeSite.wageMode),
+                initialOtRate = activeSite.otRate,
                 onDismiss = { viewModel.showSalaryDialog.value = false },
                 onSave = { sal, daily, mode, otr ->
                     viewModel.updateSalarySettings(sal, daily, mode, otr)
@@ -276,7 +325,7 @@ fun MainApp(
 
         if (showWorkDays) {
             WorkDaysDialog(
-                initialWorkDays = settings.workDays,
+                initialWorkDays = activeSite.workDays,
                 onDismiss = { viewModel.showWorkDaysDialog.value = false },
                 onSave = { wd -> viewModel.updateWorkDays(wd) }
             )
@@ -293,7 +342,7 @@ fun MainApp(
         if (showAdvance) {
             AddAdvanceDialog(
                 onDismiss = { viewModel.showAdvanceDialog.value = false },
-                onSave = { amt, reason -> viewModel.addAdvance(amt, reason) }
+                onSave = { amt, reason, dateKey -> viewModel.addAdvance(amt, reason, dateKey) }
             )
         }
 
@@ -359,7 +408,21 @@ fun MainApp(
                 onToggleSettled = { mKey, settled ->
                     viewModel.toggleMonthSettled(mKey, settled)
                 },
+                onPartialPayment = { mKey, paid ->
+                    viewModel.recordMonthPartialPayment(mKey, paid)
+                },
                 onDismiss = { viewModel.showPrevBalanceDialog.value = false }
+            )
+        }
+
+        if (showSites) {
+            WorkSitesDialog(
+                sites = viewModel.resolveSitesList(settings),
+                activeSiteId = activeSite.id,
+                onSwitchSite = { siteId -> viewModel.switchActiveSite(siteId) },
+                onSaveSite = { site -> viewModel.addOrUpdateWorkSite(site) },
+                onDeleteSite = { siteId -> viewModel.deleteWorkSite(siteId) },
+                onDismiss = { viewModel.showSitesDialog.value = false }
             )
         }
     }

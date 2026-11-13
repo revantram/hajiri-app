@@ -28,6 +28,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -38,6 +39,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -62,17 +64,21 @@ import com.example.hajiri.ui.theme.StatusRed
 import com.example.hajiri.ui.theme.StatusRedBg
 import com.example.hajiri.ui.theme.StatusYellow
 import com.example.hajiri.ui.theme.StatusYellowBg
+import com.example.hajiri.util.DailyReminderScheduler
 import com.example.hajiri.util.DateUtils
 import com.example.hajiri.util.UpdateCheckState
 import com.example.hajiri.viewmodel.HajiriTab
 import com.example.hajiri.viewmodel.HajiriViewModel
+import com.example.hajiri.viewmodel.SyncStatus
 import java.time.LocalDate
+import java.time.YearMonth
 
 @Composable
 fun HomeScreen(
     viewModel: HajiriViewModel,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     val attendance by viewModel.attendance.collectAsState()
     val otHours by viewModel.otHours.collectAsState()
     val advances by viewModel.advances.collectAsState()
@@ -81,17 +87,24 @@ fun HomeScreen(
     val streakPair by viewModel.streakPair.collectAsState()
     val currentUser by viewModel.currentUser.collectAsState()
     val updateState by viewModel.updateCheckState.collectAsState()
+    val syncStatus by viewModel.syncStatus.collectAsState()
 
     val palette = LocalHajiriPalette.current
-    val wageMode = WageMode.fromId(settings.wageMode)
+    val activeSite = viewModel.getActiveSite(settings)
+    val wageMode = WageMode.fromId(activeSite.wageMode)
 
-    val today = LocalDate.now()
-    val todayKey = viewModel.todayKey
+    val todayKey by viewModel.todayKeyState.collectAsState()
+    val todayMonthKey by viewModel.todayMonthKeyState.collectAsState()
+    val today = remember(todayKey) { DateUtils.parseDateKey(todayKey) ?: LocalDate.now() }
     val todayRecord = attendance[todayKey]
     val todayOt = otHours[todayKey] ?: 0f
 
+    LaunchedEffect(todayKey, todayRecord) {
+        DailyReminderScheduler.recordTodayAttendanceStatus(context, todayKey, todayRecord != null)
+    }
+
     var otInputText by remember { mutableStateOf("") }
-    var noteInputText by remember(todayRecord?.note) { mutableStateOf(todayRecord?.note ?: "") }
+    var noteInputText by remember(todayKey, todayRecord?.note) { mutableStateOf(todayRecord?.note ?: "") }
 
     LazyColumn(
         modifier = modifier
@@ -104,7 +117,7 @@ fun HomeScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 14.dp, bottom = 4.dp),
+                    .padding(top = 14.dp, bottom = 2.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -138,10 +151,15 @@ fun HomeScreen(
                     }
                 }
 
+                val pillDotColor = when (syncStatus) {
+                    SyncStatus.OFFLINE_SAVED -> OtOrange
+                    SyncStatus.SYNCING_PENDING -> palette.accent
+                    SyncStatus.SYNCED -> StatusGreen
+                }
                 Surface(
                     shape = RoundedCornerShape(50),
                     color = palette.glassCardHigh,
-                    border = BorderStroke(1.dp, palette.glassBorderMid),
+                    border = BorderStroke(1.dp, pillDotColor.copy(alpha = 0.35f)),
                     modifier = Modifier
                         .shadow(4.dp, RoundedCornerShape(50), spotColor = Color(0x1A000000))
                         .clickable { viewModel.setTab(HajiriTab.SETTINGS) }
@@ -155,7 +173,7 @@ fun HomeScreen(
                         Box(
                             modifier = Modifier
                                 .size(8.dp)
-                                .background(StatusGreen, CircleShape)
+                                .background(pillDotColor, CircleShape)
                         )
                         Text(
                             text = currentUser?.name?.ifBlank { "क्लाउड सिंक" } ?: "क्लाउड सिंक",
@@ -164,6 +182,61 @@ fun HomeScreen(
                             fontWeight = FontWeight.SemiBold
                         )
                     }
+                }
+            }
+        }
+
+        // Offline-First & Live Sync Status Strip + Active Site Switcher Pill
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                val (syncBg, syncFg, syncIcon) = when (syncStatus) {
+                    SyncStatus.OFFLINE_SAVED -> Triple(OtOrangeBg, OtOrange, "📴")
+                    SyncStatus.SYNCING_PENDING -> Triple(palette.accent.copy(alpha = 0.12f), palette.accent, "🔄")
+                    SyncStatus.SYNCED -> Triple(StatusGreenBg, StatusGreen, "☁️")
+                }
+                Surface(
+                    shape = RoundedCornerShape(50),
+                    color = syncBg,
+                    border = BorderStroke(1.dp, syncFg.copy(alpha = 0.35f)),
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag("offline_sync_banner")
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(5.dp)
+                    ) {
+                        Text(text = syncIcon, fontSize = 11.sp)
+                        Text(
+                            text = syncStatus.badgeText,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = syncFg,
+                            maxLines = 1
+                        )
+                    }
+                }
+
+                Surface(
+                    shape = RoundedCornerShape(50),
+                    color = palette.glassCardHigh,
+                    border = BorderStroke(1.dp, palette.accent.copy(alpha = 0.38f)),
+                    modifier = Modifier
+                        .clickable { viewModel.showSitesDialog.value = true }
+                        .testTag("home_site_switcher_pill")
+                ) {
+                    Text(
+                        text = "🏗️ ${activeSite.name.take(14)} ▼",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = palette.accent,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                    )
                 }
             }
         }
@@ -483,11 +556,19 @@ fun HomeScreen(
 
                     Spacer(modifier = Modifier.height(14.dp))
 
-                    val monthlyTarget = if (wageMode == WageMode.DAILY) {
-                        val effectiveWorkDays = if (settings.workDays > 0) settings.workDays else 26
-                        settings.dailyWage * effectiveWorkDays
+                    val daysInCurrentMonth = remember(todayMonthKey) {
+                        runCatching { YearMonth.parse(todayMonthKey).lengthOfMonth() }
+                            .getOrDefault(YearMonth.now().lengthOfMonth())
+                    }
+                    val effectiveWorkDays = if (activeSite.workDays in 1..31 && activeSite.workDays != 26) {
+                        activeSite.workDays
                     } else {
-                        settings.salary
+                        daysInCurrentMonth
+                    }
+                    val monthlyTarget = if (wageMode == WageMode.DAILY) {
+                        activeSite.dailyWage * effectiveWorkDays
+                    } else {
+                        activeSite.salary
                     }
                     val progress = if (monthlyTarget > 0.0) {
                         ((stats.baseEarnings + stats.otEarnings) / monthlyTarget).toFloat().coerceIn(0f, 1f)
@@ -549,7 +630,7 @@ fun HomeScreen(
             }
         }
 
-        // 4B. Previous Month Remaining Balance Card ("पिछले महीने का बाकी")
+        // 4B. Previous Month Remaining Balance Card ("पिछले महीने का बाकी" - Cumulative & Partial)
         item {
             GlassCard {
                 Column {
@@ -566,10 +647,12 @@ fun HomeScreen(
                                 color = palette.textPrimary
                             )
                             Text(
-                                text = if (stats.previousMonthTitle.isNotBlank()) {
-                                    "${stats.previousMonthTitle} का बचा हिसाब"
-                                } else {
-                                    "पिछले महीने का बचा हिसाब"
+                                text = when {
+                                    stats.previousMonthsPendingCount > 1 ->
+                                        "${stats.previousMonthsPendingCount} महीनों का संचयी बकाया जुड़ा है"
+                                    stats.previousMonthTitle.isNotBlank() ->
+                                        "${stats.previousMonthTitle} का बचा हिसाब"
+                                    else -> "पिछले महीने का बचा हिसाब"
                                 },
                                 fontSize = 11.sp,
                                 color = palette.textMuted
@@ -596,49 +679,60 @@ fun HomeScreen(
 
                     Spacer(modifier = Modifier.height(10.dp))
 
+                    val displayPending = maxOf(stats.carryForwardAdded, stats.previousMonthRawBalance)
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = if (stats.previousMonthRawBalance > 0.0) {
-                                "₹${DateUtils.formatInr(stats.previousMonthRawBalance)}"
-                            } else {
-                                "₹0"
-                            },
-                            fontSize = 22.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = when {
-                                stats.previousMonthRawBalance <= 0.0 -> palette.textMuted
-                                stats.isPreviousMonthReceived -> StatusGreen
-                                else -> OtOrange
+                        Column {
+                            Text(
+                                text = if (displayPending > 0.0) {
+                                    "₹${DateUtils.formatInr(displayPending)}"
+                                } else {
+                                    "₹0"
+                                },
+                                fontSize = 22.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = when {
+                                    displayPending <= 0.0 && stats.isPreviousMonthReceived -> StatusGreen
+                                    displayPending <= 0.0 -> palette.textMuted
+                                    else -> OtOrange
+                                }
+                            )
+                            if (stats.previousMonthPaidAmount > 0.0 && !stats.isPreviousMonthReceived) {
+                                Text(
+                                    text = "मिला: ₹${DateUtils.formatInr(stats.previousMonthPaidAmount)} • बाकी: ₹${DateUtils.formatInr(stats.previousMonthRawBalance)}",
+                                    fontSize = 10.sp,
+                                    color = palette.accent,
+                                    fontWeight = FontWeight.SemiBold
+                                )
                             }
-                        )
+                        }
 
                         Text(
                             text = when {
-                                stats.previousMonthRawBalance <= 0.0 -> "कोई बाकी नहीं"
-                                stats.isPreviousMonthReceived -> "✅ ले लिया गया (सैलरी में नहीं जुड़ा)"
-                                else -> "➕ नहीं लिया (कुल सैलरी में जुड़ा)"
+                                displayPending <= 0.01 && stats.previousMonthPaidAmount > 0.0 -> "✅ पूरा ले लिया गया"
+                                displayPending <= 0.01 -> "कोई बाकी नहीं"
+                                else -> "➕ कुल सैलरी में जुड़ा है"
                             },
                             fontSize = 11.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = when {
-                                stats.previousMonthRawBalance <= 0.0 -> palette.textMuted
-                                stats.isPreviousMonthReceived -> StatusGreen
+                                displayPending <= 0.01 && stats.previousMonthPaidAmount > 0.0 -> StatusGreen
+                                displayPending <= 0.01 -> palette.textMuted
                                 else -> OtOrange
                             }
                         )
                     }
 
-                    if (stats.previousMonthRawBalance > 0.0 && stats.previousMonthKey.isNotBlank()) {
+                    if ((stats.previousMonthRawBalance > 0.0 || stats.previousMonthPaidAmount > 0.0) && stats.previousMonthKey.isNotBlank()) {
                         Spacer(modifier = Modifier.height(10.dp))
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            val unpaidActive = !stats.isPreviousMonthReceived
+                            val unpaidActive = !stats.isPreviousMonthReceived && stats.previousMonthPaidAmount <= 0.0
                             Surface(
                                 shape = RoundedCornerShape(12.dp),
                                 color = if (unpaidActive) OtOrange.copy(alpha = 0.16f) else palette.segmentedTrackBg,
@@ -654,14 +748,40 @@ fun HomeScreen(
                                     .testTag("prev_month_unpaid_btn")
                             ) {
                                 Box(
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 12.dp),
+                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 12.dp),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Text(
-                                        text = if (unpaidActive) "✓ नहीं लिया (जोड़ें)" else "नहीं लिया (जोड़ें)",
-                                        fontSize = 12.sp,
+                                        text = if (unpaidActive) "✓ बाकी जोड़ें" else "बाकी जोड़ें",
+                                        fontSize = 11.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = if (unpaidActive) OtOrange else palette.textSecondary
+                                    )
+                                }
+                            }
+
+                            val partialActive = !stats.isPreviousMonthReceived && stats.previousMonthPaidAmount > 0.0
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = if (partialActive) palette.accent.copy(alpha = 0.16f) else palette.segmentedTrackBg,
+                                border = BorderStroke(
+                                    width = if (partialActive) 1.5.dp else 1.dp,
+                                    color = if (partialActive) palette.accent else palette.glassBorderMid
+                                ),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clickable { viewModel.showPrevBalanceDialog.value = true }
+                                    .testTag("prev_month_partial_btn")
+                            ) {
+                                Box(
+                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 12.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = "💵 आंशिक",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (partialActive) palette.accent else palette.textSecondary
                                     )
                                 }
                             }
@@ -682,12 +802,12 @@ fun HomeScreen(
                                     .testTag("prev_month_paid_btn")
                             ) {
                                 Box(
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 12.dp),
+                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 12.dp),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Text(
-                                        text = if (paidActive) "✓ ले लिया गया" else "ले लिया गया (न जोड़ें)",
-                                        fontSize = 12.sp,
+                                        text = if (paidActive) "✓ पूरा मिला" else "पूरा मिला",
+                                        fontSize = 11.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = if (paidActive) StatusGreen else palette.textSecondary
                                     )
@@ -796,7 +916,7 @@ fun HomeScreen(
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    val monthAdvances = advances.filter { it.dateKey.startsWith(viewModel.todayMonthKey) }
+                    val monthAdvances = advances.filter { it.dateKey.startsWith(todayMonthKey) }
                     if (monthAdvances.isEmpty()) {
                         Text(
                             text = "इस महीने कोई एडवांस दर्ज नहीं है",

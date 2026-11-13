@@ -43,10 +43,22 @@ enum class AppThemeStyle(val id: String, val labelHindi: String, val emoji: Stri
 }
 
 @IgnoreExtraProperties
+data class WorkSite(
+    val id: String = "default",
+    val name: String = "मुख्य काम",
+    val wageMode: String = WageMode.MONTHLY.id,
+    val salary: Double = 0.0,
+    val dailyWage: Double = 0.0,
+    val otRate: Double = 50.0,
+    val workDays: Int = 26
+)
+
+@IgnoreExtraProperties
 data class AttendanceFirestoreDto(
     @DocumentId val id: String = "",
     val status: String = AttendanceStatus.PRESENT.id,
     val note: String = "",
+    val siteId: String = "",
     @ServerTimestamp val createdAt: Timestamp? = null,
     @ServerTimestamp val updatedAt: Timestamp? = null
 )
@@ -54,6 +66,7 @@ data class AttendanceFirestoreDto(
 data class AttendanceRecord(
     val status: AttendanceStatus = AttendanceStatus.PRESENT,
     val note: String = "",
+    val siteId: String = "",
     val createdAt: Timestamp? = null,
     val updatedAt: Timestamp? = null
 )
@@ -62,6 +75,7 @@ data class AttendanceRecord(
 data class OvertimeRecord(
     @DocumentId val dateKey: String = "",
     val hours: Double = 0.0,
+    val siteId: String = "",
     @ServerTimestamp val createdAt: Timestamp? = null,
     @ServerTimestamp val updatedAt: Timestamp? = null
 )
@@ -72,6 +86,7 @@ data class AdvanceRecord(
     val amount: Double = 0.0,
     val reason: String = "",
     val dateKey: String = "",
+    val siteId: String = "",
     @ServerTimestamp val createdAt: Timestamp? = null,
     @ServerTimestamp val updatedAt: Timestamp? = null
 )
@@ -86,6 +101,9 @@ data class UserSettings(
     val workDays: Int = 26,
     val themeStyle: String = AppThemeStyle.LIQUID_LIGHT.id,
     val settledMonths: List<String> = emptyList(),
+    val monthPayments: Map<String, Double> = emptyMap(),
+    val activeSiteId: String = "default",
+    val sites: List<WorkSite> = emptyList(),
     @ServerTimestamp val createdAt: Timestamp? = null,
     @ServerTimestamp val updatedAt: Timestamp? = null
 )
@@ -115,6 +133,8 @@ data class MonthlyStats(
     val previousMonthKey: String = "",
     val previousMonthTitle: String = "",
     val previousMonthRawBalance: Double = 0.0,
+    val previousMonthPaidAmount: Double = 0.0,
+    val previousMonthsPendingCount: Int = 0,
     val isPreviousMonthReceived: Boolean = false,
     val carryForwardAdded: Double = 0.0,
     val netTakeHome: Double = 0.0,

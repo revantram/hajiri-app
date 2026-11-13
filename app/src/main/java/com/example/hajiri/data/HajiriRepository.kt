@@ -11,6 +11,7 @@ import com.example.hajiri.model.OvertimeRecord
 import com.example.hajiri.model.UserProfile
 import com.example.hajiri.model.UserSettings
 import com.example.hajiri.model.WageMode
+import com.example.hajiri.model.WorkSite
 import com.google.firebase.Firebase
 import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
@@ -19,9 +20,11 @@ import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FirebaseFirestoreException
+import com.google.firebase.firestore.MetadataChanges
 import com.google.firebase.firestore.snapshots
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.tasks.await
 import kotlin.coroutines.cancellation.CancellationException
@@ -71,6 +74,7 @@ class HajiriRepository(
                     dto.id to AttendanceRecord(
                         status = AttendanceStatus.fromId(dto.status) ?: AttendanceStatus.PRESENT,
                         note = dto.note,
+                        siteId = dto.siteId,
                         createdAt = dto.createdAt,
                         updatedAt = dto.updatedAt
                     )
@@ -82,21 +86,25 @@ class HajiriRepository(
             }
     }
 
-    fun observeOvertime(userId: String): Flow<Map<String, Float>> {
+    fun observeOvertimeRecords(userId: String): Flow<Map<String, OvertimeRecord>> {
         val colRef = userDoc(userId).collection("overtime")
         return colRef.snapshots()
             .map { snapshot ->
                 snapshot.toObjects(
                     OvertimeRecord::class.java,
                     DocumentSnapshot.ServerTimestampBehavior.ESTIMATE
-                ).associate { record ->
-                    record.dateKey to record.hours.toFloat()
-                }
+                ).associateBy { it.dateKey }
             }
             .catch { error ->
                 logFlowFirestoreErrorIfSignedIn(error, userId, OperationType.LIST, colRef.path)
                 throw error
             }
+    }
+
+    fun observeOvertime(userId: String): Flow<Map<String, Float>> {
+        return observeOvertimeRecords(userId).map { map ->
+            map.mapValues { it.value.hours.toFloat() }
+        }
     }
 
     fun observeAdvances(userId: String): Flow<List<AdvanceRecord>> {
@@ -131,6 +139,33 @@ class HajiriRepository(
                 logFlowFirestoreErrorIfSignedIn(error, userId, OperationType.GET, docRef.path)
                 throw error
             }
+    }
+
+    fun observeHasPendingWrites(userId: String): Flow<Boolean> {
+        val attFlow = userDoc(userId).collection("attendance")
+            .snapshots(MetadataChanges.INCLUDE)
+            .map { it.metadata.hasPendingWrites() }
+            .catch { error ->
+                logFlowFirestoreErrorIfSignedIn(error, userId, OperationType.LIST, "users/$userId/attendance")
+                emit(false)
+            }
+        val settFlow = userDoc(userId).collection("settings").document(SETTINGS_DOC_ID)
+            .snapshots(MetadataChanges.INCLUDE)
+            .map { it.metadata.hasPendingWrites() }
+            .catch { error ->
+                logFlowFirestoreErrorIfSignedIn(error, userId, OperationType.GET, "users/$userId/settings/$SETTINGS_DOC_ID")
+                emit(false)
+            }
+        val advFlow = userDoc(userId).collection("advances")
+            .snapshots(MetadataChanges.INCLUDE)
+            .map { it.metadata.hasPendingWrites() }
+            .catch { error ->
+                logFlowFirestoreErrorIfSignedIn(error, userId, OperationType.LIST, "users/$userId/advances")
+                emit(false)
+            }
+        return combine(attFlow, settFlow, advFlow) { attPending, settPending, advPending ->
+            attPending || settPending || advPending
+        }
     }
 
     suspend fun ensureUserProfile(name: String, email: String, phone: String? = null) {
@@ -213,29 +248,35 @@ class HajiriRepository(
         }
     }
 
-    suspend fun setAttendance(dateKey: String, status: AttendanceStatus, note: String? = null) {
+    suspend fun setAttendance(
+        dateKey: String,
+        status: AttendanceStatus,
+        note: String? = null,
+        siteId: String? = null
+    ) {
         val uid = requireUserId()
         val docRef = userDoc(uid).collection("attendance").document(dateKey)
+        val cleanSiteId = siteId?.trim()?.take(64).orEmpty()
         try {
             val snap = docRef.get().await()
             if (!snap.exists()) {
-                docRef.set(
-                    mapOf(
-                        "status" to status.id,
-                        "note" to (note ?: "").trim().take(500),
-                        "createdAt" to FieldValue.serverTimestamp(),
-                        "updatedAt" to FieldValue.serverTimestamp()
-                    )
-                ).await()
+                val payload = mutableMapOf<String, Any>(
+                    "status" to status.id,
+                    "note" to (note ?: "").trim().take(500),
+                    "createdAt" to FieldValue.serverTimestamp(),
+                    "updatedAt" to FieldValue.serverTimestamp()
+                )
+                if (cleanSiteId.isNotBlank()) payload["siteId"] = cleanSiteId
+                docRef.set(payload).await()
             } else {
                 val resolvedNote = (note ?: snap.getString("note") ?: "").trim().take(500)
-                docRef.update(
-                    mapOf(
-                        "status" to status.id,
-                        "note" to resolvedNote,
-                        "updatedAt" to FieldValue.serverTimestamp()
-                    )
-                ).await()
+                val updates = mutableMapOf<String, Any>(
+                    "status" to status.id,
+                    "note" to resolvedNote,
+                    "updatedAt" to FieldValue.serverTimestamp()
+                )
+                if (cleanSiteId.isNotBlank()) updates["siteId"] = cleanSiteId
+                docRef.update(updates).await()
             }
         } catch (e: CancellationException) {
             throw e
@@ -335,29 +376,30 @@ class HajiriRepository(
         }
     }
 
-    suspend fun addOvertime(dateKey: String, hours: Float) {
+    suspend fun addOvertime(dateKey: String, hours: Float, siteId: String? = null) {
         val uid = requireUserId()
         val docRef = userDoc(uid).collection("overtime").document(dateKey)
+        val cleanSiteId = siteId?.trim()?.take(64).orEmpty()
         try {
             val snap = docRef.get().await()
             if (!snap.exists()) {
                 val capped = hours.toDouble().coerceIn(0.01, 24.0)
-                docRef.set(
-                    mapOf(
-                        "hours" to capped,
-                        "createdAt" to FieldValue.serverTimestamp(),
-                        "updatedAt" to FieldValue.serverTimestamp()
-                    )
-                ).await()
+                val payload = mutableMapOf<String, Any>(
+                    "hours" to capped,
+                    "createdAt" to FieldValue.serverTimestamp(),
+                    "updatedAt" to FieldValue.serverTimestamp()
+                )
+                if (cleanSiteId.isNotBlank()) payload["siteId"] = cleanSiteId
+                docRef.set(payload).await()
             } else {
                 val prev = snap.getDouble("hours") ?: 0.0
                 val capped = (prev + hours.toDouble()).coerceIn(0.01, 24.0)
-                docRef.update(
-                    mapOf(
-                        "hours" to capped,
-                        "updatedAt" to FieldValue.serverTimestamp()
-                    )
-                ).await()
+                val updates = mutableMapOf<String, Any>(
+                    "hours" to capped,
+                    "updatedAt" to FieldValue.serverTimestamp()
+                )
+                if (cleanSiteId.isNotBlank()) updates["siteId"] = cleanSiteId
+                docRef.update(updates).await()
             }
         } catch (e: CancellationException) {
             throw e
@@ -367,19 +409,63 @@ class HajiriRepository(
         }
     }
 
-    suspend fun addAdvance(amount: Double, reason: String, dateKey: String): String {
+    suspend fun setOvertime(dateKey: String, hours: Float, siteId: String? = null) {
         val uid = requireUserId()
-        val docRef = userDoc(uid).collection("advances").document()
+        val docRef = userDoc(uid).collection("overtime").document(dateKey)
+        val cleanSiteId = siteId?.trim()?.take(64).orEmpty()
         try {
-            docRef.set(
-                mapOf(
-                    "amount" to amount.coerceIn(0.01, 10000000.0),
-                    "reason" to reason.trim().take(200),
-                    "dateKey" to dateKey,
+            if (hours <= 0f) {
+                val snap = docRef.get().await()
+                if (snap.exists()) {
+                    docRef.delete().await()
+                }
+                return
+            }
+            val capped = hours.toDouble().coerceIn(0.01, 24.0)
+            val snap = docRef.get().await()
+            if (!snap.exists()) {
+                val payload = mutableMapOf<String, Any>(
+                    "hours" to capped,
                     "createdAt" to FieldValue.serverTimestamp(),
                     "updatedAt" to FieldValue.serverTimestamp()
                 )
-            ).await()
+                if (cleanSiteId.isNotBlank()) payload["siteId"] = cleanSiteId
+                docRef.set(payload).await()
+            } else {
+                val updates = mutableMapOf<String, Any>(
+                    "hours" to capped,
+                    "updatedAt" to FieldValue.serverTimestamp()
+                )
+                if (cleanSiteId.isNotBlank()) updates["siteId"] = cleanSiteId
+                docRef.update(updates).await()
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.WRITE, docRef.path)
+            throw e
+        }
+    }
+
+    suspend fun addAdvance(
+        amount: Double,
+        reason: String,
+        dateKey: String,
+        siteId: String? = null
+    ): String {
+        val uid = requireUserId()
+        val docRef = userDoc(uid).collection("advances").document()
+        val cleanSiteId = siteId?.trim()?.take(64).orEmpty()
+        try {
+            val payload = mutableMapOf<String, Any>(
+                "amount" to amount.coerceIn(0.01, 10000000.0),
+                "reason" to reason.trim().take(200),
+                "dateKey" to dateKey,
+                "createdAt" to FieldValue.serverTimestamp(),
+                "updatedAt" to FieldValue.serverTimestamp()
+            )
+            if (cleanSiteId.isNotBlank()) payload["siteId"] = cleanSiteId
+            docRef.set(payload).await()
             return docRef.id
         } catch (e: CancellationException) {
             throw e
@@ -489,6 +575,14 @@ class HajiriRepository(
     }
 
     suspend fun setMonthSettled(monthKey: String, isSettled: Boolean) {
+        setMonthPayment(monthKey = monthKey, paidAmount = null, isSettled = isSettled)
+    }
+
+    suspend fun setMonthPayment(
+        monthKey: String,
+        paidAmount: Double?,
+        isSettled: Boolean
+    ) {
         val uid = requireUserId()
         val docRef = userDoc(uid).collection("settings").document(SETTINGS_DOC_ID)
         val cleanMonth = monthKey.trim().take(7)
@@ -496,6 +590,9 @@ class HajiriRepository(
             val snap = docRef.get().await()
             if (!snap.exists()) {
                 val initialList = if (isSettled && cleanMonth.isNotBlank()) listOf(cleanMonth) else emptyList()
+                val initialMap = if (paidAmount != null && paidAmount > 0.0 && cleanMonth.isNotBlank()) {
+                    mapOf(cleanMonth to paidAmount.coerceIn(0.0, 100000000.0))
+                } else emptyMap()
                 docRef.set(
                     mapOf(
                         "salary" to 0.0,
@@ -505,22 +602,125 @@ class HajiriRepository(
                         "workDays" to 26,
                         "themeStyle" to AppThemeStyle.LIQUID_LIGHT.id,
                         "settledMonths" to initialList,
+                        "monthPayments" to initialMap,
+                        "activeSiteId" to "default",
+                        "sites" to emptyList<Map<String, Any>>(),
                         "createdAt" to FieldValue.serverTimestamp(),
                         "updatedAt" to FieldValue.serverTimestamp()
                     )
                 ).await()
             } else {
-                val existing = (snap.get("settledMonths") as? List<*>)
+                val existingList = (snap.get("settledMonths") as? List<*>)
                     ?.mapNotNull { it as? String }
                     ?.toMutableSet()
                     ?: mutableSetOf()
+                val existingPayments = (snap.get("monthPayments") as? Map<*, *>)
+                    ?.entries
+                    ?.mapNotNull { (k, v) ->
+                        val key = k as? String
+                        val num = (v as? Number)?.toDouble()
+                        if (key != null && num != null) key to num else null
+                    }
+                    ?.toMap()
+                    ?.toMutableMap()
+                    ?: mutableMapOf()
+
                 if (cleanMonth.isNotBlank()) {
-                    if (isSettled) existing.add(cleanMonth) else existing.remove(cleanMonth)
+                    if (isSettled) {
+                        existingList.add(cleanMonth)
+                    } else {
+                        existingList.remove(cleanMonth)
+                    }
+
+                    if (paidAmount == null) {
+                        if (!isSettled) existingPayments.remove(cleanMonth)
+                    } else if (paidAmount <= 0.0) {
+                        existingPayments.remove(cleanMonth)
+                    } else {
+                        existingPayments[cleanMonth] = paidAmount.coerceIn(0.0, 100000000.0)
+                    }
                 }
-                val updatedList = existing.sorted().takeLast(120)
+                val trimmedPayments = existingPayments.entries
+                    .sortedBy { it.key }
+                    .takeLast(120)
+                    .associate { it.key to it.value }
+
                 docRef.update(
                     mapOf(
-                        "settledMonths" to updatedList,
+                        "settledMonths" to existingList.sorted().takeLast(120),
+                        "monthPayments" to trimmedPayments,
+                        "updatedAt" to FieldValue.serverTimestamp()
+                    )
+                ).await()
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.WRITE, docRef.path)
+            throw e
+        }
+    }
+
+    suspend fun saveSitesAndActiveSite(
+        sites: List<WorkSite>,
+        activeSiteId: String
+    ) {
+        val uid = requireUserId()
+        val docRef = userDoc(uid).collection("settings").document(SETTINGS_DOC_ID)
+        val cleanSites = sites.take(30).map { site ->
+            WorkSite(
+                id = site.id.trim().ifBlank { "default" }.take(64),
+                name = site.name.trim().ifBlank { "मुख्य काम" }.take(80),
+                wageMode = WageMode.fromId(site.wageMode).id,
+                salary = site.salary.coerceIn(0.0, 100000000.0),
+                dailyWage = site.dailyWage.coerceIn(0.0, 10000000.0),
+                otRate = site.otRate.coerceIn(0.0, 1000000.0),
+                workDays = site.workDays.coerceIn(1, 31)
+            )
+        }
+        val selected = cleanSites.firstOrNull { it.id == activeSiteId }
+            ?: cleanSites.firstOrNull()
+            ?: WorkSite()
+        val serializedSites = cleanSites.map { s ->
+            mapOf(
+                "id" to s.id,
+                "name" to s.name,
+                "wageMode" to s.wageMode,
+                "salary" to s.salary,
+                "dailyWage" to s.dailyWage,
+                "otRate" to s.otRate,
+                "workDays" to s.workDays
+            )
+        }
+        try {
+            val snap = docRef.get().await()
+            if (!snap.exists()) {
+                docRef.set(
+                    mapOf(
+                        "salary" to selected.salary,
+                        "dailyWage" to selected.dailyWage,
+                        "wageMode" to selected.wageMode,
+                        "otRate" to selected.otRate,
+                        "workDays" to selected.workDays,
+                        "themeStyle" to AppThemeStyle.LIQUID_LIGHT.id,
+                        "settledMonths" to emptyList<String>(),
+                        "monthPayments" to emptyMap<String, Double>(),
+                        "activeSiteId" to selected.id,
+                        "sites" to serializedSites,
+                        "createdAt" to FieldValue.serverTimestamp(),
+                        "updatedAt" to FieldValue.serverTimestamp()
+                    )
+                ).await()
+            } else {
+                docRef.update(
+                    mapOf(
+                        "salary" to selected.salary,
+                        "dailyWage" to selected.dailyWage,
+                        "wageMode" to selected.wageMode,
+                        "otRate" to selected.otRate,
+                        "workDays" to selected.workDays,
+                        "activeSiteId" to selected.id,
+                        "sites" to serializedSites,
                         "updatedAt" to FieldValue.serverTimestamp()
                     )
                 ).await()

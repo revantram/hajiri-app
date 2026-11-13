@@ -265,6 +265,19 @@ test("Settings & Advances: owner CRUD succeeds; cross-user and invalid payloads 
       workDays: 26,
       themeStyle: "ocean_glass",
       settledMonths: ["2026-09"],
+      monthPayments: { "2026-10": 10000 },
+      activeSiteId: "site_metro",
+      sites: [
+        {
+          id: "site_metro",
+          name: "मेट्रो साइट",
+          wageMode: "daily",
+          salary: 18000,
+          dailyWage: 700,
+          otRate: 100,
+          workDays: 26,
+        },
+      ],
       createdAt: validTimestamp(),
       updatedAt: validTimestamp(),
     })
@@ -273,6 +286,8 @@ test("Settings & Advances: owner CRUD succeeds; cross-user and invalid payloads 
   await assertSucceeds(
     settRef.update({
       settledMonths: ["2026-09", "2026-10"],
+      monthPayments: { "2026-10": 15000 },
+      activeSiteId: "default",
       updatedAt: validTimestamp(),
     })
   );

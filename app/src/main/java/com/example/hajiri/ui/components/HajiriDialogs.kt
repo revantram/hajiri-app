@@ -61,11 +61,21 @@ import com.example.hajiri.ui.theme.StatusYellowBright
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.SelectableDates
+import androidx.compose.material3.rememberDatePickerState
 import com.example.hajiri.ui.theme.OtOrange
+import com.example.hajiri.ui.theme.StatusGreenBg
 import com.example.hajiri.util.AppUpdateChecker
 import com.example.hajiri.util.DateUtils
 import com.example.hajiri.util.UpdateCheckState
 import com.example.hajiri.viewmodel.PreviousMonthBalanceItem
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneOffset
+import kotlin.math.roundToInt
 
 @Composable
 fun SalaryDialog(
@@ -218,10 +228,11 @@ fun CalendarDayDialog(
     dateKey: String,
     initialStatus: AttendanceStatus?,
     initialNote: String,
+    initialOtHours: Float = 0f,
     hasExistingRecord: Boolean,
     onDismiss: () -> Unit,
     onClear: () -> Unit,
-    onSave: (status: AttendanceStatus?, note: String) -> Unit
+    onSave: (status: AttendanceStatus?, note: String, otHoursValue: Float?) -> Unit
 ) {
     val palette = LocalHajiriPalette.current
     val parsedDate = DateUtils.parseDateKey(dateKey)
@@ -240,6 +251,13 @@ fun CalendarDayDialog(
         )
     }
     var noteText by remember(dateKey) { mutableStateOf(initialNote) }
+    var otText by remember(dateKey, initialOtHours) {
+        mutableStateOf(
+            if (initialOtHours > 0f) {
+                if (initialOtHours % 1f == 0f) initialOtHours.toInt().toString() else initialOtHours.toString()
+            } else ""
+        )
+    }
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
@@ -252,6 +270,7 @@ fun CalendarDayDialog(
                 modifier = Modifier
                     .padding(22.dp)
                     .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -275,7 +294,7 @@ fun CalendarDayDialog(
                         }
                     }
 
-                    if (hasExistingRecord) {
+                    if (hasExistingRecord || initialOtHours > 0f) {
                         TextButton(
                             onClick = onClear,
                             modifier = Modifier.testTag("calendar_popup_clear_btn")
@@ -290,7 +309,7 @@ fun CalendarDayDialog(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(14.dp))
 
                 Text(
                     text = "हाजिरी चुनें (P / A / HD)",
@@ -332,7 +351,94 @@ fun CalendarDayDialog(
                     )
                 }
 
-                Spacer(modifier = Modifier.height(18.dp))
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Overtime (OT) Edit / Delete Stepper
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "⏰ ओवरटाइम (OT) घंटे",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = palette.textSecondary
+                    )
+                    val parsedOt = otText.toFloatOrNull() ?: 0f
+                    if (parsedOt > 0f || initialOtHours > 0f) {
+                        Text(
+                            text = "🗑️ OT हटाएं (0h)",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = StatusRed,
+                            modifier = Modifier
+                                .clickable { otText = "" }
+                                .padding(horizontal = 6.dp, vertical = 4.dp)
+                                .testTag("calendar_popup_clear_ot_btn")
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = palette.segmentedTrackBg,
+                        border = BorderStroke(1.dp, palette.glassBorderMid),
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clickable {
+                                val cur = otText.toFloatOrNull() ?: 0f
+                                val next = ((cur - 0.5f).coerceAtLeast(0f) * 10f).roundToInt() / 10f
+                                otText = if (next <= 0f) "" else if (next % 1f == 0f) next.toInt().toString() else next.toString()
+                            }
+                            .testTag("calendar_popup_ot_minus_btn")
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Text("-0.5", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = OtOrange)
+                        }
+                    }
+
+                    OutlinedTextField(
+                        value = otText,
+                        onValueChange = { raw ->
+                            val filtered = raw.filter { it.isDigit() || it == '.' }
+                            if (filtered.count { it == '.' } <= 1) otText = filtered
+                        },
+                        placeholder = { Text("0 घंटे (जैसे: 2.5)", fontSize = 12.sp) },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        singleLine = true,
+                        modifier = Modifier.weight(1f).testTag("calendar_popup_ot_input"),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = outlinedFieldColors()
+                    )
+
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = OtOrange.copy(alpha = 0.14f),
+                        border = BorderStroke(1.dp, OtOrange.copy(alpha = 0.45f)),
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clickable {
+                                val cur = otText.toFloatOrNull() ?: 0f
+                                val next = ((cur + 0.5f).coerceAtMost(24f) * 10f).roundToInt() / 10f
+                                otText = if (next % 1f == 0f) next.toInt().toString() else next.toString()
+                            }
+                            .testTag("calendar_popup_ot_plus_btn")
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Text("+0.5", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = OtOrange)
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
 
                 // Note section at bottom
                 Text(
@@ -353,8 +459,10 @@ fun CalendarDayDialog(
                     maxLines = 3
                 )
 
-                Spacer(modifier = Modifier.height(22.dp))
+                Spacer(modifier = Modifier.height(20.dp))
 
+                val otVal = (otText.toFloatOrNull() ?: 0f).coerceIn(0f, 24f)
+                val otChanged = otVal != initialOtHours
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End
@@ -368,8 +476,8 @@ fun CalendarDayDialog(
                     }
                     Spacer(modifier = Modifier.width(12.dp))
                     Button(
-                        onClick = { onSave(selectedStatus, noteText) },
-                        enabled = selectedStatus != null || noteText.isNotBlank() || hasExistingRecord,
+                        onClick = { onSave(selectedStatus, noteText, otVal) },
+                        enabled = selectedStatus != null || noteText.isNotBlank() || hasExistingRecord || otChanged || otVal > 0f,
                         colors = ButtonDefaults.buttonColors(containerColor = palette.accent),
                         shape = RoundedCornerShape(14.dp),
                         modifier = Modifier.testTag("calendar_popup_save_btn")
@@ -555,7 +663,11 @@ fun WorkDaysDialog(
     onSave: (workDays: Int) -> Unit
 ) {
     val palette = LocalHajiriPalette.current
-    var text by remember { mutableStateOf(initialWorkDays.toString()) }
+    val isInitiallyAuto = initialWorkDays !in 1..31 || initialWorkDays == 26
+    var isAutoMode by remember { mutableStateOf(isInitiallyAuto) }
+    var text by remember {
+        mutableStateOf(if (isInitiallyAuto) "" else initialWorkDays.toString())
+    }
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
@@ -575,13 +687,53 @@ fun WorkDaysDialog(
                     fontWeight = FontWeight.Bold,
                     color = palette.textPrimary
                 )
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = "ऑटो मोड में फरवरी (28/29), अप्रैल (30) व 31 दिन वाले महीने अपने आप सेट होते हैं।",
+                    fontSize = 11.sp,
+                    color = palette.textMuted
+                )
+                Spacer(modifier = Modifier.height(14.dp))
+
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = if (isAutoMode) palette.accent else palette.segmentedTrackBg,
+                    border = BorderStroke(
+                        width = if (isAutoMode) 1.5.dp else 1.dp,
+                        color = if (isAutoMode) palette.accent else palette.glassBorderMid
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            isAutoMode = true
+                            onSave(26)
+                        }
+                        .testTag("workdays_auto_btn")
+                ) {
+                    Text(
+                        text = if (isAutoMode) {
+                            "✓ ऑटो (महीने के अनुसार 30/31 दिन)"
+                        } else {
+                            "✨ ऑटो (महीने के अनुसार 30/31 दिन)"
+                        },
+                        color = if (isAutoMode) Color.White else palette.textPrimary,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
 
                 OutlinedTextField(
                     value = text,
-                    onValueChange = { text = it.filter { ch -> ch.isDigit() } },
-                    label = { Text("महीने में कुल काम के दिन") },
-                    placeholder = { Text("जैसे: 26") },
+                    onValueChange = {
+                        text = it.filter { ch -> ch.isDigit() }
+                        isAutoMode = false
+                    },
+                    label = { Text("या कस्टम दिन दर्ज करें (जैसे: 25, 28, 30)") },
+                    placeholder = { Text("जैसे: 30") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth().testTag("workdays_input"),
                     shape = RoundedCornerShape(14.dp),
@@ -589,7 +741,7 @@ fun WorkDaysDialog(
                     singleLine = true
                 )
 
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(22.dp))
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -605,8 +757,12 @@ fun WorkDaysDialog(
                     Spacer(modifier = Modifier.width(12.dp))
                     Button(
                         onClick = {
-                            val wd = text.toIntOrNull() ?: 26
-                            onSave(wd.coerceIn(1, 31))
+                            val custom = text.toIntOrNull()
+                            if (isAutoMode || custom == null) {
+                                onSave(26)
+                            } else {
+                                onSave(custom.coerceIn(1, 31))
+                            }
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = palette.accent),
                         shape = RoundedCornerShape(14.dp),
@@ -620,14 +776,56 @@ fun WorkDaysDialog(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddAdvanceDialog(
     onDismiss: () -> Unit,
-    onSave: (amount: Double, reason: String) -> Unit
+    onSave: (amount: Double, reason: String, dateKey: String) -> Unit
 ) {
     val palette = LocalHajiriPalette.current
     var amountText by remember { mutableStateOf("") }
     var reasonText by remember { mutableStateOf("") }
+    var selectedDate by remember { mutableStateOf(LocalDate.now()) }
+    var showDatePicker by remember { mutableStateOf(false) }
+
+    val selectedDateKey = DateUtils.toDateKey(selectedDate)
+    val selectedDateLabel = DateUtils.formatHindiDate(selectedDate)
+
+    if (showDatePicker) {
+        val initialMillis = selectedDate.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
+        val todayEndMillis = LocalDate.now().atTime(23, 59, 59).toInstant(ZoneOffset.UTC).toEpochMilli()
+        val datePickerState = rememberDatePickerState(
+            initialSelectedDateMillis = initialMillis,
+            selectableDates = object : SelectableDates {
+                override fun isSelectableDate(utcTimeMillis: Long): Boolean = utcTimeMillis <= todayEndMillis
+            }
+        )
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        datePickerState.selectedDateMillis?.let { millis ->
+                            selectedDate = Instant.ofEpochMilli(millis)
+                                .atZone(ZoneOffset.UTC)
+                                .toLocalDate()
+                        }
+                        showDatePicker = false
+                    },
+                    modifier = Modifier.testTag("advance_datepicker_confirm_btn")
+                ) {
+                    Text("चुनें", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDatePicker = false }) {
+                    Text("रद्द करें")
+                }
+            }
+        ) {
+            DatePicker(state = datePickerState)
+        }
+    }
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
@@ -647,7 +845,49 @@ fun AddAdvanceDialog(
                     fontWeight = FontWeight.Bold,
                     color = palette.textPrimary
                 )
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Date Picker Row
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = palette.accent.copy(alpha = 0.09f),
+                    border = BorderStroke(1.dp, palette.accent.copy(alpha = 0.3f)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { showDatePicker = true }
+                        .testTag("advance_date_picker_btn")
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(
+                                text = "📅 एडवांस लेने की तारीख",
+                                fontSize = 11.sp,
+                                color = palette.textSecondary,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Text(
+                                text = selectedDateLabel,
+                                fontSize = 14.sp,
+                                color = palette.textPrimary,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        Text(
+                            text = "बदलें ›",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = palette.accent
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
 
                 OutlinedTextField(
                     value = amountText,
@@ -673,7 +913,7 @@ fun AddAdvanceDialog(
                     colors = outlinedFieldColors()
                 )
 
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(22.dp))
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -691,7 +931,7 @@ fun AddAdvanceDialog(
                         onClick = {
                             val amt = amountText.toDoubleOrNull() ?: 0.0
                             if (amt > 0.0) {
-                                onSave(amt, reasonText.ifBlank { "एडवांस" })
+                                onSave(amt, reasonText.ifBlank { "एडवांस" }, selectedDateKey)
                             }
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = palette.accent),
@@ -1163,9 +1403,13 @@ fun AppUpdateDialog(
 fun PreviousBalanceDialog(
     months: List<PreviousMonthBalanceItem>,
     onToggleSettled: (monthKey: String, isSettled: Boolean) -> Unit,
+    onPartialPayment: (monthKey: String, paidAmount: Double) -> Unit,
     onDismiss: () -> Unit
 ) {
     val palette = LocalHajiriPalette.current
+    val totalPendingSum = months.sumOf { it.remainingAmount }
+    var editingMonthKey by remember { mutableStateOf<String?>(null) }
+    var partialInputText by remember { mutableStateOf("") }
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
@@ -1185,19 +1429,52 @@ fun PreviousBalanceDialog(
                     fontWeight = FontWeight.Bold,
                     color = palette.textPrimary
                 )
-                Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "अगर पिछले महीने का बचा पैसा नहीं लिया है तो अगले महीने की 'कुल हाथ में आने वाली सैलरी' में जुड़ जाएगा। ले लिया हो तो 'ले लिया गया' चुनें।",
+                    text = "पिछले सभी महीनों का बचा बकाया इस महीने की सैलरी में जुड़ता है। यदि आंशिक या पूरा पैसा मिला हो तो यहाँ दर्ज करें।",
                     fontSize = 11.sp,
                     color = palette.textSecondary
                 )
 
-                Spacer(modifier = Modifier.height(14.dp))
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = if (totalPendingSum > 0.01) OtOrange.copy(alpha = 0.12f) else StatusGreenBg,
+                    border = BorderStroke(
+                        1.dp,
+                        if (totalPendingSum > 0.01) OtOrange.copy(alpha = 0.4f) else StatusGreen.copy(alpha = 0.35f)
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "कुल संचयी बकाया",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = palette.textPrimary
+                        )
+                        Text(
+                            text = "₹${DateUtils.formatInr(totalPendingSum)}",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = if (totalPendingSum > 0.01) OtOrange else StatusGreen
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
 
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(max = 360.dp)
+                        .heightIn(max = 370.dp)
                         .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
@@ -1219,30 +1496,43 @@ fun PreviousBalanceDialog(
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
+                                    Column {
+                                        Text(
+                                            text = item.monthTitle,
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = palette.textPrimary
+                                        )
+                                        if (item.earnedAmount > 0.0) {
+                                            Text(
+                                                text = "कुल: ₹${DateUtils.formatInr(item.earnedAmount)} • मिला: ₹${DateUtils.formatInr(item.paidAmount)}",
+                                                fontSize = 10.sp,
+                                                color = palette.textMuted
+                                            )
+                                        }
+                                    }
                                     Text(
-                                        text = item.monthTitle,
+                                        text = if (item.remainingAmount > 0.0) {
+                                            "बाकी ₹${DateUtils.formatInr(item.remainingAmount)}"
+                                        } else {
+                                            "₹0"
+                                        },
                                         fontSize = 14.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = palette.textPrimary
-                                    )
-                                    Text(
-                                        text = "₹${DateUtils.formatInr(item.remainingAmount)}",
-                                        fontSize = 15.sp,
                                         fontWeight = FontWeight.ExtraBold,
                                         color = when {
-                                            item.remainingAmount <= 0.0 -> palette.textMuted
+                                            item.earnedAmount <= 0.0 -> palette.textMuted
                                             item.isReceived -> StatusGreen
                                             else -> OtOrange
                                         }
                                     )
                                 }
 
-                                if (item.remainingAmount > 0.0) {
+                                if (item.earnedAmount > 0.0) {
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                                     ) {
-                                        val unpaidActive = !item.isReceived
+                                        val unpaidActive = !item.isReceived && item.paidAmount <= 0.0
                                         Surface(
                                             shape = RoundedCornerShape(10.dp),
                                             color = if (unpaidActive) OtOrange.copy(alpha = 0.16f) else palette.segmentedTrackBg,
@@ -1252,18 +1542,54 @@ fun PreviousBalanceDialog(
                                             ),
                                             modifier = Modifier
                                                 .weight(1f)
-                                                .clickable { onToggleSettled(item.monthKey, false) }
+                                                .clickable {
+                                                    editingMonthKey = null
+                                                    onToggleSettled(item.monthKey, false)
+                                                }
                                                 .testTag("dialog_unpaid_${item.monthKey}")
                                         ) {
                                             Box(
-                                                modifier = Modifier.padding(vertical = 10.dp, horizontal = 6.dp),
+                                                modifier = Modifier.padding(vertical = 9.dp, horizontal = 4.dp),
                                                 contentAlignment = Alignment.Center
                                             ) {
                                                 Text(
-                                                    text = if (unpaidActive) "✓ नहीं लिया (जोड़ें)" else "नहीं लिया (जोड़ें)",
+                                                    text = if (unpaidActive) "✓ बाकी जोड़ें" else "बाकी जोड़ें",
                                                     fontSize = 11.sp,
                                                     fontWeight = FontWeight.Bold,
                                                     color = if (unpaidActive) OtOrange else palette.textSecondary
+                                                )
+                                            }
+                                        }
+
+                                        val partialActive = !item.isReceived && item.paidAmount > 0.0
+                                        Surface(
+                                            shape = RoundedCornerShape(10.dp),
+                                            color = if (partialActive || editingMonthKey == item.monthKey) palette.accent.copy(alpha = 0.16f) else palette.segmentedTrackBg,
+                                            border = BorderStroke(
+                                                width = if (partialActive || editingMonthKey == item.monthKey) 1.5.dp else 1.dp,
+                                                color = if (partialActive || editingMonthKey == item.monthKey) palette.accent else palette.glassBorderMid
+                                            ),
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .clickable {
+                                                    if (editingMonthKey == item.monthKey) {
+                                                        editingMonthKey = null
+                                                    } else {
+                                                        editingMonthKey = item.monthKey
+                                                        partialInputText = if (item.paidAmount > 0.0) item.paidAmount.toLong().toString() else ""
+                                                    }
+                                                }
+                                                .testTag("dialog_partial_${item.monthKey}")
+                                        ) {
+                                            Box(
+                                                modifier = Modifier.padding(vertical = 9.dp, horizontal = 4.dp),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Text(
+                                                    text = "💵 आंशिक",
+                                                    fontSize = 11.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = if (partialActive || editingMonthKey == item.monthKey) palette.accent else palette.textSecondary
                                                 )
                                             }
                                         }
@@ -1278,15 +1604,18 @@ fun PreviousBalanceDialog(
                                             ),
                                             modifier = Modifier
                                                 .weight(1f)
-                                                .clickable { onToggleSettled(item.monthKey, true) }
+                                                .clickable {
+                                                    editingMonthKey = null
+                                                    onToggleSettled(item.monthKey, true)
+                                                }
                                                 .testTag("dialog_paid_${item.monthKey}")
                                         ) {
                                             Box(
-                                                modifier = Modifier.padding(vertical = 10.dp, horizontal = 6.dp),
+                                                modifier = Modifier.padding(vertical = 9.dp, horizontal = 4.dp),
                                                 contentAlignment = Alignment.Center
                                             ) {
                                                 Text(
-                                                    text = if (paidActive) "✓ ले लिया गया" else "ले लिया गया",
+                                                    text = if (paidActive) "✓ पूरा मिला" else "पूरा मिला",
                                                     fontSize = 11.sp,
                                                     fontWeight = FontWeight.Bold,
                                                     color = if (paidActive) StatusGreen else palette.textSecondary
@@ -1294,9 +1623,45 @@ fun PreviousBalanceDialog(
                                             }
                                         }
                                     }
+
+                                    if (editingMonthKey == item.monthKey) {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(top = 4.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            OutlinedTextField(
+                                                value = partialInputText,
+                                                onValueChange = { partialInputText = it.filter { ch -> ch.isDigit() } },
+                                                label = { Text("कितने ₹ मिले?", fontSize = 11.sp) },
+                                                placeholder = { Text("जैसे: 10000", fontSize = 12.sp) },
+                                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                                singleLine = true,
+                                                shape = RoundedCornerShape(12.dp),
+                                                colors = outlinedFieldColors(),
+                                                modifier = Modifier
+                                                    .weight(1f)
+                                                    .testTag("partial_paid_input_${item.monthKey}")
+                                            )
+                                            Button(
+                                                onClick = {
+                                                    val paidVal = partialInputText.toDoubleOrNull() ?: 0.0
+                                                    onPartialPayment(item.monthKey, paidVal)
+                                                    editingMonthKey = null
+                                                },
+                                                colors = ButtonDefaults.buttonColors(containerColor = palette.accent),
+                                                shape = RoundedCornerShape(12.dp),
+                                                modifier = Modifier.testTag("partial_paid_save_${item.monthKey}")
+                                            ) {
+                                                Text("सेव ✓", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                            }
+                                        }
+                                    }
                                 } else {
                                     Text(
-                                        text = "कोई बकाया नहीं",
+                                        text = "कोई कमाई/बकाया नहीं",
                                         fontSize = 11.sp,
                                         color = palette.textMuted
                                     )
