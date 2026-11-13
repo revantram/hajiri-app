@@ -1,14 +1,12 @@
 package com.example.hajiri
 
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.activity.viewModels
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -16,7 +14,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -34,19 +31,38 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.credentials.CredentialManager
+import androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.Companion.APPLICATION_KEY
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
+import com.example.hajiri.data.HajiriRepository
+import com.example.hajiri.data.authStateFlow
+import com.example.hajiri.data.signOutFromGoogle
+import com.example.hajiri.model.AppThemeStyle
+import com.example.hajiri.model.WageMode
 import com.example.hajiri.ui.components.AddAdvanceDialog
+import com.example.hajiri.ui.components.AppUpdateDialog
+import com.example.hajiri.ui.components.CalendarDayDialog
+import com.example.hajiri.ui.components.PreviousBalanceDialog
 import com.example.hajiri.ui.components.ConfirmActionDialog
+import com.example.hajiri.ui.components.PhoneProfileDialog
 import com.example.hajiri.ui.components.SalaryDialog
+import com.example.hajiri.ui.components.ThemePickerDialog
 import com.example.hajiri.ui.components.WorkDaysDialog
 import com.example.hajiri.ui.screens.AuthScreen
 import com.example.hajiri.ui.screens.CalendarScreen
@@ -54,45 +70,109 @@ import com.example.hajiri.ui.screens.HistoryScreen
 import com.example.hajiri.ui.screens.HomeScreen
 import com.example.hajiri.ui.screens.ReportsScreen
 import com.example.hajiri.ui.screens.SettingsScreen
-import com.example.hajiri.ui.theme.AccentIndigo
 import com.example.hajiri.ui.theme.HajiriTheme
-import com.example.hajiri.ui.theme.LightBackground
-import com.example.hajiri.ui.theme.LiquidGlassCardHigh
-import com.example.hajiri.ui.theme.LiquidMeshBottom
-import com.example.hajiri.ui.theme.LiquidMeshCenter
-import com.example.hajiri.ui.theme.LiquidMeshTopLeft
-import com.example.hajiri.ui.theme.LiquidMeshTopRight
-import com.example.hajiri.ui.theme.TextMuted
+import com.example.hajiri.ui.theme.LocalHajiriPalette
 import com.example.hajiri.viewmodel.HajiriTab
 import com.example.hajiri.viewmodel.HajiriViewModel
+import com.google.firebase.Firebase
+import com.google.firebase.auth.auth
+import com.google.firebase.firestore.FirebaseFirestore
 
 class MainActivity : ComponentActivity() {
-    private val viewModel: HajiriViewModel by viewModels()
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
         setContent {
             HajiriTheme {
-                MainApp(viewModel)
+                AppContent()
             }
         }
     }
 }
 
 @Composable
-fun MainApp(viewModel: HajiriViewModel) {
+fun AppContent() {
+    val auth = Firebase.auth
+    val currentUser by auth.authStateFlow().collectAsStateWithLifecycle(initialValue = auth.currentUser)
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val credentialManager = remember(context) { CredentialManager.create(context) }
+
+    val user = currentUser
+    if (user == null) {
+        AuthScreen(
+            onAuthSuccess = { /* authStateFlow updates automatically */ }
+        )
+    } else {
+        val uid = user.uid
+        key(uid) {
+            val viewModel: HajiriViewModel = viewModel(
+                key = uid,
+                factory = viewModelFactory {
+                    initializer {
+                        val app = checkNotNull(this[APPLICATION_KEY]) {
+                            "APPLICATION_KEY missing from CreationExtras"
+                        }
+                        val databaseId = app.getString(R.string.firestore_database_id)
+                        val db = FirebaseFirestore.getInstance(databaseId)
+                        HajiriViewModel(HajiriRepository(db, auth), uid)
+                    }
+                }
+            )
+
+            LaunchedEffect(uid) {
+                viewModel.syncGoogleProfileIfNeeded(
+                    name = user.displayName ?: "हाजिरी यूजर",
+                    email = user.email ?: ""
+                )
+                viewModel.initUpdateState(context)
+            }
+
+            val settings by viewModel.settings.collectAsState()
+            val selectedTheme = AppThemeStyle.fromId(settings.themeStyle)
+
+            HajiriTheme(themeStyle = selectedTheme) {
+                MainApp(
+                    viewModel = viewModel,
+                    googleEmail = user.email ?: "",
+                    onSignOut = { signOutFromGoogle(credentialManager, scope) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun MainApp(
+    viewModel: HajiriViewModel,
+    googleEmail: String,
+    onSignOut: () -> Unit
+) {
+    val palette = LocalHajiriPalette.current
     val currentTab by viewModel.currentTab.collectAsState()
-    val isAuthVisible by viewModel.isAuthScreenVisible.collectAsState()
     val settings by viewModel.settings.collectAsState()
+    val attendance by viewModel.attendance.collectAsState()
+    val currentUser by viewModel.currentUser.collectAsState()
+    val syncError by viewModel.syncError.collectAsState()
+    val selectedCalendarDateKey by viewModel.selectedCalendarDateKey.collectAsState()
 
     val showSalary by viewModel.showSalaryDialog.collectAsState()
     val showWorkDays by viewModel.showWorkDaysDialog.collectAsState()
     val showAdvance by viewModel.showAdvanceDialog.collectAsState()
     val showClearMonth by viewModel.showClearMonthDialog.collectAsState()
     val showClearAll by viewModel.showClearAllDialog.collectAsState()
+    val showProfile by viewModel.showProfileDialog.collectAsState()
+    val showTheme by viewModel.showThemeDialog.collectAsState()
+    val showUpdate by viewModel.showUpdateDialog.collectAsState()
+    val showPrevBalance by viewModel.showPrevBalanceDialog.collectAsState()
+    val previousMonthsSummary by viewModel.previousMonthsSummary.collectAsState()
+    val autoUpdateEnabled by viewModel.autoUpdateCheckEnabled.collectAsState()
+    val installedVersion by viewModel.installedVersionName.collectAsState()
+    val updateRepoSlug by viewModel.updateRepoSlug.collectAsState()
+    val updateState by viewModel.updateCheckState.collectAsState()
 
+    val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(Unit) {
@@ -101,13 +181,16 @@ fun MainApp(viewModel: HajiriViewModel) {
         }
     }
 
-    // Android back navigation: if not on Home screen, Back returns to Home
-    BackHandler(enabled = currentTab != HajiriTab.HOME || isAuthVisible) {
-        if (isAuthVisible) {
-            viewModel.showAuth(false)
-        } else {
-            viewModel.setTab(HajiriTab.HOME)
+    LaunchedEffect(syncError) {
+        if (!syncError.isNullOrBlank()) {
+            snackbarHostState.showSnackbar("⚠️ $syncError")
+            viewModel.dismissSyncError()
         }
+    }
+
+    // Android back navigation: if not on Home screen, Back returns to Home
+    BackHandler(enabled = currentTab != HajiriTab.HOME) {
+        viewModel.setTab(HajiriTab.HOME)
     }
 
     // Ethereal Liquid Iridescent Ambient Background
@@ -117,11 +200,11 @@ fun MainApp(viewModel: HajiriViewModel) {
             .background(
                 brush = Brush.verticalGradient(
                     colors = listOf(
-                        LightBackground,
-                        LiquidMeshTopLeft.copy(alpha = 0.45f),
-                        LiquidMeshCenter.copy(alpha = 0.35f),
-                        LiquidMeshTopRight.copy(alpha = 0.35f),
-                        LiquidMeshBottom.copy(alpha = 0.45f)
+                        palette.background,
+                        palette.meshTopLeft.copy(alpha = if (palette.isDark) 0.75f else 0.45f),
+                        palette.meshCenter.copy(alpha = if (palette.isDark) 0.75f else 0.35f),
+                        palette.meshTopRight.copy(alpha = if (palette.isDark) 0.7f else 0.35f),
+                        palette.meshBottom.copy(alpha = if (palette.isDark) 0.75f else 0.45f)
                     )
                 )
             )
@@ -152,18 +235,42 @@ fun MainApp(viewModel: HajiriViewModel) {
                     HajiriTab.CALENDAR -> CalendarScreen(viewModel = viewModel)
                     HajiriTab.REPORTS -> ReportsScreen(viewModel = viewModel)
                     HajiriTab.HISTORY -> HistoryScreen(viewModel = viewModel)
-                    HajiriTab.SETTINGS -> SettingsScreen(viewModel = viewModel)
+                    HajiriTab.SETTINGS -> SettingsScreen(
+                        viewModel = viewModel,
+                        googleEmail = googleEmail,
+                        onSignOut = onSignOut
+                    )
                 }
             }
         }
 
         // Modals & Dialogs
+        val calDate = selectedCalendarDateKey
+        if (calDate != null) {
+            val existingRecord = attendance[calDate]
+            CalendarDayDialog(
+                dateKey = calDate,
+                initialStatus = existingRecord?.status,
+                initialNote = existingRecord?.note ?: "",
+                hasExistingRecord = existingRecord != null,
+                onDismiss = { viewModel.closeCalendarDayDialog() },
+                onClear = { viewModel.clearCalendarDayAttendance(calDate) },
+                onSave = { status, note ->
+                    viewModel.saveCalendarDayAttendance(calDate, status, note)
+                }
+            )
+        }
+
         if (showSalary) {
             SalaryDialog(
                 initialSalary = settings.salary,
+                initialDailyWage = settings.dailyWage,
+                initialWageMode = WageMode.fromId(settings.wageMode),
                 initialOtRate = settings.otRate,
                 onDismiss = { viewModel.showSalaryDialog.value = false },
-                onSave = { sal, otr -> viewModel.updateSalarySettings(sal, otr) }
+                onSave = { sal, daily, mode, otr ->
+                    viewModel.updateSalarySettings(sal, daily, mode, otr)
+                }
             )
         }
 
@@ -175,10 +282,27 @@ fun MainApp(viewModel: HajiriViewModel) {
             )
         }
 
+        if (showTheme) {
+            ThemePickerDialog(
+                currentTheme = AppThemeStyle.fromId(settings.themeStyle),
+                onDismiss = { viewModel.showThemeDialog.value = false },
+                onSelectTheme = { theme -> viewModel.updateThemeStyle(theme) }
+            )
+        }
+
         if (showAdvance) {
             AddAdvanceDialog(
                 onDismiss = { viewModel.showAdvanceDialog.value = false },
                 onSave = { amt, reason -> viewModel.addAdvance(amt, reason) }
+            )
+        }
+
+        if (showProfile) {
+            PhoneProfileDialog(
+                initialName = currentUser?.name ?: "",
+                initialPhone = currentUser?.phone ?: "",
+                onDismiss = { viewModel.showProfileDialog.value = false },
+                onSave = { name, phone -> viewModel.updateProfileDetails(name, phone) }
             )
         }
 
@@ -200,13 +324,43 @@ fun MainApp(viewModel: HajiriViewModel) {
             )
         }
 
-        // Auth Screen Overlay
-        AnimatedVisibility(
-            visible = isAuthVisible,
-            enter = fadeIn(),
-            exit = fadeOut()
-        ) {
-            AuthScreen(viewModel = viewModel)
+        if (showUpdate) {
+            AppUpdateDialog(
+                installedVersion = installedVersion,
+                repoSlug = updateRepoSlug,
+                updateState = updateState,
+                autoCheckEnabled = autoUpdateEnabled,
+                onToggleAutoCheck = { enabled ->
+                    viewModel.setAutoUpdateCheckEnabled(context, enabled)
+                },
+                onCheckNow = {
+                    viewModel.checkForAppUpdate(context, userInitiated = true)
+                },
+                onSaveRepo = { slug ->
+                    viewModel.saveUpdateRepoSlug(context, slug)
+                },
+                onOpenUrl = { url ->
+                    if (url.isNotBlank()) {
+                        try {
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                            context.startActivity(intent)
+                        } catch (_: Exception) {
+                            viewModel.showMessage("⚠️ अपडेट लिंक खुल नहीं सका")
+                        }
+                    }
+                },
+                onDismiss = { viewModel.showUpdateDialog.value = false }
+            )
+        }
+
+        if (showPrevBalance) {
+            PreviousBalanceDialog(
+                months = previousMonthsSummary,
+                onToggleSettled = { mKey, settled ->
+                    viewModel.toggleMonthSettled(mKey, settled)
+                },
+                onDismiss = { viewModel.showPrevBalanceDialog.value = false }
+            )
         }
     }
 }
@@ -216,6 +370,7 @@ fun FloatingLiquidDock(
     selectedTab: HajiriTab,
     onTabSelected: (HajiriTab) -> Unit
 ) {
+    val palette = LocalHajiriPalette.current
     val navInsets = WindowInsets.navigationBars.asPaddingValues()
 
     Box(
@@ -238,14 +393,14 @@ fun FloatingLiquidDock(
                     spotColor = Color(0x2E312E81)
                 ),
             shape = RoundedCornerShape(32.dp),
-            color = LiquidGlassCardHigh,
+            color = palette.glassCardHigh,
             border = BorderStroke(
                 width = 1.2.dp,
                 brush = Brush.verticalGradient(
                     colors = listOf(
-                        Color.White,
-                        Color(0xB3FFFFFF),
-                        Color(0x334F46E5)
+                        palette.glassBorderTop,
+                        palette.glassBorderMid,
+                        palette.glassBorderBottom
                     )
                 )
             )
@@ -261,8 +416,8 @@ fun FloatingLiquidDock(
                     val isSelected = tab == selectedTab
                     Surface(
                         shape = RoundedCornerShape(20.dp),
-                        color = if (isSelected) AccentIndigo.copy(alpha = 0.12f) else Color.Transparent,
-                        border = if (isSelected) BorderStroke(1.dp, AccentIndigo.copy(alpha = 0.25f)) else null,
+                        color = if (isSelected) palette.accent.copy(alpha = 0.14f) else Color.Transparent,
+                        border = if (isSelected) BorderStroke(1.dp, palette.accent.copy(alpha = 0.3f)) else null,
                         modifier = Modifier
                             .clickable { onTabSelected(tab) }
                             .testTag("nav_tab_${tab.name.lowercase()}")
@@ -279,7 +434,7 @@ fun FloatingLiquidDock(
                                 text = tab.label,
                                 fontSize = 10.sp,
                                 fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Medium,
-                                color = if (isSelected) AccentIndigo else TextMuted
+                                color = if (isSelected) palette.accent else palette.textMuted
                             )
                         }
                     }

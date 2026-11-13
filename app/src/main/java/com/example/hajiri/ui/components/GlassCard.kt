@@ -16,19 +16,22 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.example.hajiri.ui.theme.LiquidGlassBorder
-import com.example.hajiri.ui.theme.LiquidGlassCard
+import com.example.hajiri.ui.theme.LocalHajiriPalette
 
 @Composable
 fun GlassCard(
     modifier: Modifier = Modifier,
     shape: Shape = RoundedCornerShape(24.dp),
-    backgroundColor: Color = LiquidGlassCard,
-    borderColor: Color = LiquidGlassBorder,
+    backgroundColor: Color? = null,
+    borderColor: Color? = null,
     elevation: Dp = 6.dp,
     contentPadding: Dp = 16.dp,
     content: @Composable BoxScope.() -> Unit
 ) {
+    val palette = LocalHajiriPalette.current
+    val resolvedBg = backgroundColor ?: palette.glassCard
+    val resolvedMidBorder = borderColor ?: palette.glassBorderMid
+
     Surface(
         modifier = modifier
             .fillMaxWidth()
@@ -39,14 +42,14 @@ fun GlassCard(
                 spotColor = Color(0x14312E81)
             ),
         shape = shape,
-        color = backgroundColor,
+        color = resolvedBg,
         border = BorderStroke(
             width = 1.2.dp,
             brush = Brush.verticalGradient(
                 colors = listOf(
-                    Color.White,
-                    borderColor,
-                    Color(0x334F46E5)
+                    palette.glassBorderTop,
+                    resolvedMidBorder,
+                    palette.glassBorderBottom
                 )
             )
         )
@@ -56,8 +59,8 @@ fun GlassCard(
                 .background(
                     brush = Brush.verticalGradient(
                         colors = listOf(
-                            Color.White.copy(alpha = 0.5f),
-                            Color.White.copy(alpha = 0.15f)
+                            palette.glassSheenTop,
+                            palette.glassSheenBottom
                         )
                     )
                 )

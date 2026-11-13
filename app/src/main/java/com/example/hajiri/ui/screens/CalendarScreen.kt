@@ -35,7 +35,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.hajiri.model.AttendanceStatus
 import com.example.hajiri.ui.components.GlassCard
-import com.example.hajiri.ui.theme.AccentIndigo
+import com.example.hajiri.ui.theme.LocalHajiriPalette
 import com.example.hajiri.ui.theme.StatusBlue
 import com.example.hajiri.ui.theme.StatusBlueBg
 import com.example.hajiri.ui.theme.StatusGreen
@@ -44,9 +44,6 @@ import com.example.hajiri.ui.theme.StatusRed
 import com.example.hajiri.ui.theme.StatusRedBg
 import com.example.hajiri.ui.theme.StatusYellow
 import com.example.hajiri.ui.theme.StatusYellowBg
-import com.example.hajiri.ui.theme.TextMuted
-import com.example.hajiri.ui.theme.TextPrimary
-import com.example.hajiri.ui.theme.TextSecondary
 import com.example.hajiri.util.DateUtils
 import com.example.hajiri.viewmodel.HajiriViewModel
 import java.time.LocalDate
@@ -56,6 +53,7 @@ fun CalendarScreen(
     viewModel: HajiriViewModel,
     modifier: Modifier = Modifier
 ) {
+    val palette = LocalHajiriPalette.current
     val calendarMonth by viewModel.calendarMonth.collectAsState()
     val attendance by viewModel.attendance.collectAsState()
     val todayKey = viewModel.todayKey
@@ -85,20 +83,20 @@ fun CalendarScreen(
                     text = "कैलेंडर",
                     fontSize = 24.sp,
                     fontWeight = FontWeight.ExtraBold,
-                    color = TextPrimary
+                    color = palette.textPrimary
                 )
             }
 
             Surface(
                 shape = RoundedCornerShape(50),
-                color = Color.White.copy(alpha = 0.85f),
-                border = BorderStroke(1.dp, Color.White),
+                color = palette.glassCardHigh,
+                border = BorderStroke(1.dp, palette.glassBorderTop),
                 modifier = Modifier.shadow(4.dp, RoundedCornerShape(50), spotColor = Color(0x1A000000))
             ) {
                 Text(
                     text = DateUtils.formatHindiMonthYear(calendarMonth),
                     fontSize = 12.sp,
-                    color = TextPrimary,
+                    color = palette.textPrimary,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
                 )
@@ -117,41 +115,48 @@ fun CalendarScreen(
                         text = DateUtils.formatHindiMonthYear(calendarMonth),
                         fontSize = 18.sp,
                         fontWeight = FontWeight.ExtraBold,
-                        color = TextPrimary
+                        color = palette.textPrimary
                     )
 
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Surface(
                             shape = CircleShape,
-                            color = Color.White,
-                            border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                            color = palette.glassCardHigh,
+                            border = BorderStroke(1.dp, palette.fieldUnfocusedBorder),
                             modifier = Modifier
                                 .size(36.dp)
                                 .shadow(3.dp, CircleShape, spotColor = Color(0x14000000))
                                 .clickable { viewModel.changeCalendarMonth(-1) }
                         ) {
                             Box(contentAlignment = Alignment.Center) {
-                                Text(text = "‹", fontSize = 22.sp, color = TextPrimary, fontWeight = FontWeight.Bold)
+                                Text(text = "‹", fontSize = 22.sp, color = palette.textPrimary, fontWeight = FontWeight.Bold)
                             }
                         }
 
                         Surface(
                             shape = CircleShape,
-                            color = Color.White,
-                            border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                            color = palette.glassCardHigh,
+                            border = BorderStroke(1.dp, palette.fieldUnfocusedBorder),
                             modifier = Modifier
                                 .size(36.dp)
                                 .shadow(3.dp, CircleShape, spotColor = Color(0x14000000))
                                 .clickable { viewModel.changeCalendarMonth(1) }
                         ) {
                             Box(contentAlignment = Alignment.Center) {
-                                Text(text = "›", fontSize = 22.sp, color = TextPrimary, fontWeight = FontWeight.Bold)
+                                Text(text = "›", fontSize = 22.sp, color = palette.textPrimary, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(18.dp))
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = "तारीख पर क्लिक करके P / A / HD और नोट लगाएं",
+                    fontSize = 11.sp,
+                    color = palette.textMuted
+                )
+
+                Spacer(modifier = Modifier.height(14.dp))
 
                 // Day-of-week header row
                 Row(modifier = Modifier.fillMaxWidth()) {
@@ -160,7 +165,7 @@ fun CalendarScreen(
                             text = dayName,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
-                            color = TextSecondary,
+                            color = palette.textSecondary,
                             textAlign = TextAlign.Center,
                             modifier = Modifier.weight(1f)
                         )
@@ -204,7 +209,7 @@ fun CalendarScreen(
                                         .weight(1f)
                                         .aspectRatio(1f)
                                         .testTag("cal_day_$dayNum"),
-                                    onClick = { viewModel.toggleCalendarDay(dateKey) }
+                                    onClick = { viewModel.openCalendarDayDialog(dateKey) }
                                 )
                             }
                         }
@@ -219,11 +224,10 @@ fun CalendarScreen(
                     horizontalArrangement = Arrangement.SpaceAround,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    LegendItem(StatusGreen, "हाजिर")
-                    LegendItem(StatusRed, "गैरहाजिर")
-                    LegendItem(StatusYellow, "आधा")
-                    LegendItem(StatusBlue, "छुट्टी")
-                    LegendItem(AccentIndigo, "नोट")
+                    LegendItem(StatusGreen, "P हाजिर")
+                    LegendItem(StatusRed, "A गैरहाजिर")
+                    LegendItem(StatusYellow, "HD आधा")
+                    LegendItem(palette.accent, "नोट")
                 }
             }
         }
@@ -242,19 +246,20 @@ fun CalendarDayCell(
     modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
+    val palette = LocalHajiriPalette.current
     val (bgColor, textColor) = when (status) {
         AttendanceStatus.PRESENT -> Pair(StatusGreenBg, StatusGreen)
         AttendanceStatus.ABSENT -> Pair(StatusRedBg, StatusRed)
         AttendanceStatus.HALF -> Pair(StatusYellowBg, StatusYellow)
         AttendanceStatus.LEAVE -> Pair(StatusBlueBg, StatusBlue)
-        null -> Pair(Color.Transparent, if (isSunday) StatusRed.copy(alpha = 0.8f) else TextPrimary)
+        null -> Pair(Color.Transparent, if (isSunday) StatusRed.copy(alpha = 0.85f) else palette.textPrimary)
     }
 
     Box(
         modifier = modifier
             .background(bgColor, CircleShape)
             .then(
-                if (isToday) Modifier.border(2.dp, AccentIndigo, CircleShape)
+                if (isToday) Modifier.border(2.dp, palette.accent, CircleShape)
                 else Modifier
             )
             .clickable(onClick = onClick),
@@ -274,7 +279,7 @@ fun CalendarDayCell(
                 Box(
                     modifier = Modifier
                         .size(4.dp)
-                        .background(AccentIndigo, CircleShape)
+                        .background(palette.accent, CircleShape)
                 )
             }
         }
@@ -283,6 +288,7 @@ fun CalendarDayCell(
 
 @Composable
 fun LegendItem(color: Color, label: String) {
+    val palette = LocalHajiriPalette.current
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(5.dp)
@@ -292,6 +298,6 @@ fun LegendItem(color: Color, label: String) {
                 .size(8.dp)
                 .background(color, CircleShape)
         )
-        Text(text = label, fontSize = 11.sp, color = TextSecondary, fontWeight = FontWeight.SemiBold)
+        Text(text = label, fontSize = 11.sp, color = palette.textSecondary, fontWeight = FontWeight.SemiBold)
     }
 }

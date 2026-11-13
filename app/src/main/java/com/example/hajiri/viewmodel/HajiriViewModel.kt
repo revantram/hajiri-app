@@ -1,16 +1,25 @@
 package com.example.hajiri.viewmodel
 
-import android.app.Application
-import androidx.lifecycle.AndroidViewModel
+import android.util.Log
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.hajiri.data.HajiriRepository
 import com.example.hajiri.model.AdvanceRecord
+import com.example.hajiri.model.AppThemeStyle
 import com.example.hajiri.model.AttendanceRecord
 import com.example.hajiri.model.AttendanceStatus
 import com.example.hajiri.model.MonthlyStats
 import com.example.hajiri.model.UserProfile
 import com.example.hajiri.model.UserSettings
+import com.example.hajiri.model.WageMode
+import android.content.Context
+import com.example.hajiri.util.AppUpdateChecker
 import com.example.hajiri.util.DateUtils
+import com.example.hajiri.util.MonthlySlipDailyRow
+import com.example.hajiri.util.MonthlySlipData
+import com.example.hajiri.util.UpdateCheckState
+import com.google.firebase.firestore.FirebaseFirestoreException
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -18,11 +27,13 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.YearMonth
+import kotlin.coroutines.cancellation.CancellationException
 
 enum class HajiriTab(val label: String, val iconText: String) {
     HOME("होम", "🏠"),
@@ -39,23 +50,62 @@ data class MonthTrend(
     val isSelected: Boolean
 )
 
-class HajiriViewModel(application: Application) : AndroidViewModel(application) {
-    val repository = HajiriRepository(application)
+data class PreviousMonthBalanceItem(
+    val monthKey: String,
+    val monthTitle: String,
+    val remainingAmount: Double,
+    val isReceived: Boolean
+)
+
+class HajiriViewModel(
+    private val repository: HajiriRepository,
+    private val currentUserId: String
+) : ViewModel() {
 
     private val _currentTab = MutableStateFlow(HajiriTab.HOME)
     val currentTab: StateFlow<HajiriTab> = _currentTab.asStateFlow()
 
-    private val _isAuthScreenVisible = MutableStateFlow(false)
-    val isAuthScreenVisible: StateFlow<Boolean> = _isAuthScreenVisible.asStateFlow()
-
-    private val _toastEvent = MutableSharedFlow<String>()
+    private val _toastEvent = MutableSharedFlow<String>(extraBufferCapacity = 8)
     val toastEvent: SharedFlow<String> = _toastEvent.asSharedFlow()
 
-    val attendance: StateFlow<Map<String, AttendanceRecord>> = repository.attendance
-    val otHours: StateFlow<Map<String, Float>> = repository.otHours
-    val advances: StateFlow<List<AdvanceRecord>> = repository.advances
-    val settings: StateFlow<UserSettings> = repository.settings
-    val currentUser: StateFlow<UserProfile?> = repository.currentUser
+    private val _syncError = MutableStateFlow<String?>(null)
+    val syncError: StateFlow<String?> = _syncError.asStateFlow()
+
+    private fun <T> Flow<T>.guardStream(fallback: T, label: String): Flow<T> = catch { error ->
+        val firestoreError = generateSequence(error) { it.cause }
+            .filterIsInstance<FirebaseFirestoreException>()
+            .firstOrNull()
+        if (firestoreError == null && error is CancellationException) throw error
+        val rootError = firestoreError ?: error
+        Log.w(TAG, "Error observing $label", rootError)
+        _syncError.value = rootError.message ?: "क्लाउड डेटा सिंक करने में समस्या"
+        emit(fallback)
+    }
+
+    val attendance: StateFlow<Map<String, AttendanceRecord>> =
+        repository.observeAttendance(currentUserId)
+            .guardStream(emptyMap(), "attendance")
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), emptyMap())
+
+    val otHours: StateFlow<Map<String, Float>> =
+        repository.observeOvertime(currentUserId)
+            .guardStream(emptyMap(), "overtime")
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), emptyMap())
+
+    val advances: StateFlow<List<AdvanceRecord>> =
+        repository.observeAdvances(currentUserId)
+            .guardStream(emptyList(), "advances")
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), emptyList())
+
+    val settings: StateFlow<UserSettings> =
+        repository.observeSettings(currentUserId)
+            .guardStream(UserSettings(), "settings")
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), UserSettings())
+
+    val currentUser: StateFlow<UserProfile?> =
+        repository.observeProfile(currentUserId)
+            .guardStream(null, "profile")
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), null)
 
     val todayKey = DateUtils.getTodayKey()
     val todayMonthKey = DateUtils.getTodayMonthKey()
@@ -69,26 +119,49 @@ class HajiriViewModel(application: Application) : AndroidViewModel(application) 
     private val _selectedHistoryMonth = MutableStateFlow(todayMonthKey)
     val selectedHistoryMonth: StateFlow<String> = _selectedHistoryMonth.asStateFlow()
 
+    // Selected date key for Calendar day popup dialog
+    private val _selectedCalendarDateKey = MutableStateFlow<String?>(null)
+    val selectedCalendarDateKey: StateFlow<String?> = _selectedCalendarDateKey.asStateFlow()
+
     // Dialog state holders
     var showSalaryDialog = MutableStateFlow(false)
     var showWorkDaysDialog = MutableStateFlow(false)
     var showAdvanceDialog = MutableStateFlow(false)
     var showClearMonthDialog = MutableStateFlow(false)
     var showClearAllDialog = MutableStateFlow(false)
+    var showProfileDialog = MutableStateFlow(false)
+    var showThemeDialog = MutableStateFlow(false)
+    var showUpdateDialog = MutableStateFlow(false)
+    var showPrevBalanceDialog = MutableStateFlow(false)
+
+    // Auto-update state
+    private val _autoUpdateCheckEnabled = MutableStateFlow(true)
+    val autoUpdateCheckEnabled: StateFlow<Boolean> = _autoUpdateCheckEnabled.asStateFlow()
+
+    private val _updateRepoSlug = MutableStateFlow(AppUpdateChecker.DEFAULT_GITHUB_REPO)
+    val updateRepoSlug: StateFlow<String> = _updateRepoSlug.asStateFlow()
+
+    private val _installedVersionName = MutableStateFlow("1.0")
+    val installedVersionName: StateFlow<String> = _installedVersionName.asStateFlow()
+
+    private val _updateCheckState = MutableStateFlow<UpdateCheckState>(UpdateCheckState.Idle)
+    val updateCheckState: StateFlow<UpdateCheckState> = _updateCheckState.asStateFlow()
+
+    private var hasRunStartupUpdateCheck = false
 
     // Current Month Stats for Home
     val homeStats: StateFlow<MonthlyStats> = combine(
         attendance, otHours, advances, settings
     ) { att, ot, adv, sett ->
         calculateMonthlyStats(todayMonthKey, att, ot, adv, sett)
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, MonthlyStats(todayMonthKey))
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), MonthlyStats(todayMonthKey))
 
     // Selected Report Month Stats
     val reportStats: StateFlow<MonthlyStats> = combine(
         selectedReportMonth, attendance, otHours, advances, settings
     ) { mKey, att, ot, adv, sett ->
         calculateMonthlyStats(mKey, att, ot, adv, sett)
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, MonthlyStats(todayMonthKey))
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), MonthlyStats(todayMonthKey))
 
     // 6-Month trends for report screen
     val sixMonthTrends: StateFlow<List<MonthTrend>> = combine(
@@ -113,38 +186,95 @@ class HajiriViewModel(application: Application) : AndroidViewModel(application) 
             list.add(MonthTrend(mKey, shortLabel, worked, mKey == selMonth))
         }
         list
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), emptyList())
 
     // Streak stats
-    val streakPair: StateFlow<Pair<Int, Int>> = attendance.combine(settings) { att, _ ->
+    val streakPair: StateFlow<Pair<Int, Int>> = combine(attendance, settings) { att, _ ->
         DateUtils.calculateStreak(att, todayKey)
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, Pair(0, 0))
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), Pair(0, 0))
+
+    // Previous 6 completed months' remaining balance summary
+    val previousMonthsSummary: StateFlow<List<PreviousMonthBalanceItem>> = combine(
+        attendance, otHours, advances, settings
+    ) { att, ot, adv, sett ->
+        val now = YearMonth.now()
+        (1..6).map { offset ->
+            val ym = now.minusMonths(offset.toLong())
+            val mKey = ym.toString()
+            val rawBal = calculateSingleMonthRawNet(mKey, att, ot, adv, sett)
+            PreviousMonthBalanceItem(
+                monthKey = mKey,
+                monthTitle = DateUtils.formatHindiMonthYear(ym),
+                remainingAmount = rawBal,
+                isReceived = mKey in sett.settledMonths
+            )
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), emptyList())
+
+    fun syncGoogleProfileIfNeeded(name: String, email: String) {
+        viewModelScope.launch {
+            try {
+                repository.ensureUserProfile(name = name, email = email)
+                _syncError.value = null
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w(TAG, "Profile sync warning", e)
+            }
+        }
+    }
+
+    fun updateProfileDetails(name: String, phone: String) {
+        viewModelScope.launch {
+            try {
+                repository.updateProfileDetails(name, phone)
+                showProfileDialog.value = false
+                _toastEvent.emit("✅ प्रोफ़ाइल अपडेट हो गई!")
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                _toastEvent.emit("⚠️ प्रोफ़ाइल सेव नहीं हो सकी")
+            }
+        }
+    }
+
+    fun dismissSyncError() {
+        _syncError.value = null
+    }
 
     fun setTab(tab: HajiriTab) {
         _currentTab.value = tab
     }
 
-    fun showAuth(show: Boolean) {
-        _isAuthScreenVisible.value = show
-    }
-
     fun markToday(status: AttendanceStatus) {
         viewModelScope.launch {
-            val current = attendance.value[todayKey]?.status
-            if (current == status) {
-                repository.removeAttendance(todayKey)
-                _toastEvent.emit("हाजिरी हटाई")
-            } else {
-                repository.setAttendance(todayKey, status)
-                _toastEvent.emit("${status.labelHindi} दर्ज ✓")
+            try {
+                val current = attendance.value[todayKey]?.status
+                if (current == status) {
+                    repository.removeAttendance(todayKey)
+                    _toastEvent.emit("हाजिरी हटाई")
+                } else {
+                    repository.setAttendance(todayKey, status)
+                    _toastEvent.emit("${status.labelHindi} दर्ज ✓")
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                _toastEvent.emit("⚠️ क्लाउड सिंक में त्रुटि")
             }
         }
     }
 
     fun saveTodayNote(note: String) {
         viewModelScope.launch {
-            repository.saveNote(todayKey, note)
-            _toastEvent.emit("📝 नोट सेव!")
+            try {
+                repository.saveNote(todayKey, note)
+                _toastEvent.emit("📝 नोट क्लाउड में सेव!")
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                _toastEvent.emit("⚠️ नोट सेव नहीं हो सका")
+            }
         }
     }
 
@@ -154,25 +284,74 @@ class HajiriViewModel(application: Application) : AndroidViewModel(application) 
                 _toastEvent.emit("⚠️ सही घंटे डालें")
                 return@launch
             }
-            repository.addOvertime(todayKey, hours)
-            _toastEvent.emit("⏰ ${hours}h OT जोड़ा")
+            try {
+                repository.addOvertime(todayKey, hours)
+                _toastEvent.emit("⏰ ${hours}h OT जोड़ा")
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                _toastEvent.emit("⚠️ OT सेव नहीं हो सका")
+            }
         }
     }
 
-    fun toggleCalendarDay(dateKey: String) {
+    fun openCalendarDayDialog(dateKey: String) {
         viewModelScope.launch {
             val date = DateUtils.parseDateKey(dateKey)
             if (date != null && date.isAfter(LocalDate.now())) {
                 _toastEvent.emit("⏳ भविष्य की तारीख नहीं")
                 return@launch
             }
-            val newStatus = repository.toggleOrCycleAttendance(dateKey)
-            if (newStatus != null) {
-                _toastEvent.emit("${newStatus.labelHindi} दर्ज ✓")
-            } else {
-                _toastEvent.emit("हाजिरी हटाई")
+            _selectedCalendarDateKey.value = dateKey
+        }
+    }
+
+    fun closeCalendarDayDialog() {
+        _selectedCalendarDateKey.value = null
+    }
+
+    fun saveCalendarDayAttendance(dateKey: String, status: AttendanceStatus?, note: String) {
+        viewModelScope.launch {
+            try {
+                when {
+                    status != null -> {
+                        repository.setAttendance(dateKey, status, note)
+                        _toastEvent.emit("${status.shortCode} (${status.labelHindi}) दर्ज ✓")
+                    }
+                    note.isNotBlank() -> {
+                        repository.saveNote(dateKey, note)
+                        _toastEvent.emit("📝 नोट सेव!")
+                    }
+                    else -> {
+                        repository.removeAttendance(dateKey)
+                        _toastEvent.emit("हाजिरी हटाई")
+                    }
+                }
+                _selectedCalendarDateKey.value = null
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                _toastEvent.emit("⚠️ हाजिरी सेव नहीं हो सकी")
             }
         }
+    }
+
+    fun clearCalendarDayAttendance(dateKey: String) {
+        viewModelScope.launch {
+            try {
+                repository.removeAttendance(dateKey)
+                _selectedCalendarDateKey.value = null
+                _toastEvent.emit("हाजिरी हटाई")
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                _toastEvent.emit("⚠️ हाजिरी हटाई नहीं जा सकी")
+            }
+        }
+    }
+
+    fun toggleCalendarDay(dateKey: String) {
+        openCalendarDayDialog(dateKey)
     }
 
     fun changeCalendarMonth(offset: Int) {
@@ -193,91 +372,119 @@ class HajiriViewModel(application: Application) : AndroidViewModel(application) 
                 _toastEvent.emit("⚠️ रकम डालें")
                 return@launch
             }
-            repository.addAdvance(amount, reason, todayKey)
-            _toastEvent.emit("💳 ₹${DateUtils.formatInr(amount)} एडवांस दर्ज")
-            showAdvanceDialog.value = false
+            try {
+                repository.addAdvance(amount, reason, todayKey)
+                _toastEvent.emit("💳 ₹${DateUtils.formatInr(amount)} एडवांस दर्ज")
+                showAdvanceDialog.value = false
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                _toastEvent.emit("⚠️ एडवांस सेव नहीं हो सका")
+            }
         }
     }
 
     fun deleteAdvance(id: String) {
         viewModelScope.launch {
-            repository.deleteAdvance(id)
-            _toastEvent.emit("🗑️ एडवांस मिटाया")
+            try {
+                repository.deleteAdvance(id)
+                _toastEvent.emit("🗑️ एडवांस मिटाया")
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                _toastEvent.emit("⚠️ एडवांस हटाने में त्रुटि")
+            }
         }
     }
 
-    fun updateSalarySettings(salary: Double, otRate: Double) {
+    fun updateSalarySettings(
+        salary: Double,
+        dailyWage: Double,
+        wageMode: WageMode,
+        otRate: Double
+    ) {
         viewModelScope.launch {
-            val cur = settings.value
-            repository.saveSettings(salary, otRate, cur.workDays)
-            _toastEvent.emit("💰 तनख्वाह सेटिंग सेव!")
-            showSalaryDialog.value = false
+            try {
+                val cur = settings.value
+                repository.saveSettings(
+                    salary = salary,
+                    dailyWage = dailyWage,
+                    wageMode = wageMode.id,
+                    otRate = otRate,
+                    workDays = cur.workDays,
+                    themeStyle = cur.themeStyle
+                )
+                _toastEvent.emit("💰 ${wageMode.labelHindi} सेटिंग सेव!")
+                showSalaryDialog.value = false
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                _toastEvent.emit("⚠️ सेटिंग सेव नहीं हो सकी")
+            }
         }
     }
 
     fun updateWorkDays(workDays: Int) {
         viewModelScope.launch {
-            val cur = settings.value
-            repository.saveSettings(cur.salary, cur.otRate, workDays)
-            _toastEvent.emit("✅ कार्यदिवस सेव!")
-            showWorkDaysDialog.value = false
-        }
-    }
-
-    fun login(phone: String, pin: String) {
-        viewModelScope.launch {
-            if (phone.length < 10 || pin.length < 4) {
-                _toastEvent.emit("⚠️ सही नंबर/PIN डालें")
-                return@launch
+            try {
+                val cur = settings.value
+                repository.saveSettings(
+                    salary = cur.salary,
+                    dailyWage = cur.dailyWage,
+                    wageMode = cur.wageMode,
+                    otRate = cur.otRate,
+                    workDays = workDays,
+                    themeStyle = cur.themeStyle
+                )
+                _toastEvent.emit("✅ कार्यदिवस सेव!")
+                showWorkDaysDialog.value = false
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                _toastEvent.emit("⚠️ कार्यदिवस सेव नहीं हो सका")
             }
-            val profile = UserProfile(name = "यूजर ($phone)", phone = phone, pin = pin)
-            repository.saveProfile(profile)
-            _isAuthScreenVisible.value = false
-            _toastEvent.emit("🎉 लॉगिन सफल: ${profile.name}")
         }
     }
 
-    fun register(name: String, phone: String, pin: String) {
+    fun updateThemeStyle(themeStyle: AppThemeStyle) {
         viewModelScope.launch {
-            if (name.isBlank() || phone.length < 10 || pin.length < 4) {
-                _toastEvent.emit("⚠️ सभी फील्ड भरें")
-                return@launch
+            try {
+                repository.saveThemeStyle(themeStyle)
+                showThemeDialog.value = false
+                _toastEvent.emit("🎨 थीम सेट: ${themeStyle.labelHindi}")
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                _toastEvent.emit("⚠️ थीम सेव नहीं हो सकी")
             }
-            val profile = UserProfile(name = name, phone = phone, pin = pin)
-            repository.saveProfile(profile)
-            _isAuthScreenVisible.value = false
-            _toastEvent.emit("🎉 स्वागत है, $name!")
-        }
-    }
-
-    fun continueOffline() {
-        _isAuthScreenVisible.value = false
-        viewModelScope.launch {
-            _toastEvent.emit("🔌 ऑफलाइन मोड चालू")
-        }
-    }
-
-    fun logout() {
-        repository.saveProfile(null)
-        _isAuthScreenVisible.value = true
-        viewModelScope.launch {
-            _toastEvent.emit("लॉगआउट किया गया")
         }
     }
 
     fun clearMonthData() {
-        repository.clearMonth(todayMonthKey)
-        showClearMonthDialog.value = false
         viewModelScope.launch {
-            _toastEvent.emit("🗑️ इस महीने का डेटा मिटाया")
+            try {
+                repository.clearMonth(todayMonthKey)
+                showClearMonthDialog.value = false
+                _toastEvent.emit("🗑️ इस महीने का डेटा मिटाया")
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                _toastEvent.emit("⚠️ डेटा मिटाने में त्रुटि")
+            }
         }
     }
 
     fun clearAllData() {
-        repository.clearAllData()
-        showClearAllDialog.value = false
         viewModelScope.launch {
-            _toastEvent.emit("⛔ सारा डेटा मिटाया")
+            try {
+                repository.clearAllData()
+                showClearAllDialog.value = false
+                _toastEvent.emit("⛔ सारा डेटा मिटाया")
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                _toastEvent.emit("⚠️ डेटा मिटाने में त्रुटि")
+            }
         }
     }
 
@@ -303,6 +510,10 @@ class HajiriViewModel(application: Application) : AndroidViewModel(application) 
             append("✈️ छुट्टी: ${stats.leaveDays} दिन\n")
             append("⏰ ओवरटाइम: ${stats.totalOtHours} घंटे\n")
             append("💳 एडवांस: ₹${DateUtils.formatInr(stats.totalAdvance)}\n")
+            if (stats.previousMonthRawBalance > 0.0) {
+                val prevStatus = if (stats.isPreviousMonthReceived) "ले लिया गया (₹0 जोड़ा)" else "+₹${DateUtils.formatInr(stats.carryForwardAdded)}"
+                append("💼 पिछला बाकी (${stats.previousMonthTitle}): $prevStatus\n")
+            }
             append("━━━━━━━━━━━━━━━━━\n")
             append("📊 उपस्थिति: ${stats.attendancePercentage}%\n")
             append("💰 कुल कमाई: ₹${DateUtils.formatInr(stats.baseEarnings + stats.otEarnings)}\n")
@@ -310,6 +521,185 @@ class HajiriViewModel(application: Application) : AndroidViewModel(application) 
             append("━━━━━━━━━━━━━━━━━\n")
             append("📱 हाजिरी ऐप")
         }
+    }
+
+    fun toggleMonthSettled(monthKey: String, isSettled: Boolean) {
+        if (monthKey.isBlank()) return
+        viewModelScope.launch {
+            try {
+                repository.setMonthSettled(monthKey, isSettled)
+                val title = DateUtils.formatHindiMonthYear(monthKey)
+                _toastEvent.emit(
+                    if (isSettled) "✅ $title की सैलरी 'ले लिया गया' मार्क की गई"
+                    else "💼 $title का बाकी पैसा कुल सैलरी में जोड़ा गया"
+                )
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                _toastEvent.emit("⚠️ पिछला हिसाब अपडेट नहीं हो सका")
+            }
+        }
+    }
+
+    fun showMessage(message: String) {
+        viewModelScope.launch {
+            _toastEvent.emit(message)
+        }
+    }
+
+    fun initUpdateState(context: Context) {
+        val appContext = context.applicationContext
+        _autoUpdateCheckEnabled.value = AppUpdateChecker.isAutoCheckEnabled(appContext)
+        _updateRepoSlug.value = AppUpdateChecker.getSavedRepoSlug(appContext)
+        _installedVersionName.value = AppUpdateChecker.getInstalledVersionName(appContext)
+        if (_autoUpdateCheckEnabled.value && !hasRunStartupUpdateCheck) {
+            hasRunStartupUpdateCheck = true
+            checkForAppUpdate(appContext, userInitiated = false)
+        }
+    }
+
+    fun setAutoUpdateCheckEnabled(context: Context, enabled: Boolean) {
+        val appContext = context.applicationContext
+        AppUpdateChecker.setAutoCheckEnabled(appContext, enabled)
+        _autoUpdateCheckEnabled.value = enabled
+        showMessage(
+            if (enabled) "🔄 ऑटो अपडेट चेक चालू किया गया"
+            else "⏸️ ऑटो अपडेट चेक बंद किया गया"
+        )
+    }
+
+    fun saveUpdateRepoSlug(context: Context, rawSlug: String) {
+        val appContext = context.applicationContext
+        val saved = AppUpdateChecker.saveRepoSlug(appContext, rawSlug)
+        _updateRepoSlug.value = saved
+        checkForAppUpdate(appContext, userInitiated = true)
+    }
+
+    fun checkForAppUpdate(context: Context, userInitiated: Boolean = true) {
+        val appContext = context.applicationContext
+        _installedVersionName.value = AppUpdateChecker.getInstalledVersionName(appContext)
+        val repoSlug = _updateRepoSlug.value.ifBlank { AppUpdateChecker.getSavedRepoSlug(appContext) }
+        viewModelScope.launch {
+            _updateCheckState.value = UpdateCheckState.Checking
+            val result = AppUpdateChecker.checkForUpdate(appContext, repoSlug)
+            _updateCheckState.value = result
+            when (result) {
+                is UpdateCheckState.UpdateAvailable -> {
+                    showUpdateDialog.value = true
+                }
+                is UpdateCheckState.UpToDate -> {
+                    if (userInitiated) {
+                        _toastEvent.emit("✅ आपका ऐप पहले से अपडेट है (v${result.currentVersion})")
+                    }
+                }
+                is UpdateCheckState.Error -> {
+                    if (userInitiated) {
+                        _toastEvent.emit("⚠️ ${result.message}")
+                    }
+                }
+                else -> Unit
+            }
+        }
+    }
+
+    fun buildMonthlySlipData(
+        monthKey: String,
+        siteOrCompany: String = "",
+        extraWorkBonus: Double = 0.0,
+        extraWorkNote: String = ""
+    ): MonthlySlipData {
+        val currentAtt = attendance.value
+        val currentOt = otHours.value
+        val currentAdv = advances.value
+        val currentSett = settings.value
+        val profile = currentUser.value
+
+        val stats = calculateMonthlyStats(
+            monthKey = monthKey,
+            att = currentAtt,
+            ot = currentOt,
+            adv = currentAdv,
+            sett = currentSett
+        )
+
+        val monthAdvances = currentAdv.filter { it.dateKey.startsWith(monthKey) }
+        val allDates = (currentAtt.keys + currentOt.keys)
+            .filter { it.startsWith(monthKey) }
+            .distinct()
+            .sorted()
+
+        val dailyRows = allDates.map { dateKey ->
+            val rec = currentAtt[dateKey]
+            val ot = currentOt[dateKey] ?: 0f
+            val parsedDate = DateUtils.parseDateKey(dateKey)
+            val dateFormatted = if (parsedDate != null) DateUtils.formatHindiDate(parsedDate) else dateKey
+            val dayShort = if (parsedDate != null) {
+                DateUtils.HINDI_DAYS[parsedDate.dayOfWeek.value - 1]
+            } else ""
+            MonthlySlipDailyRow(
+                dateKey = dateKey,
+                dateFormatted = dateFormatted,
+                dayShort = dayShort,
+                statusCode = rec?.status?.shortCode ?: "-",
+                statusLabel = rec?.status?.labelHindi ?: "",
+                otHours = ot,
+                note = rec?.note ?: ""
+            )
+        }
+
+        return MonthlySlipData(
+            monthKey = monthKey,
+            monthTitle = DateUtils.formatHindiMonthYear(monthKey),
+            employeeName = profile?.name?.ifBlank { "हाजिरी यूजर" } ?: "हाजिरी यूजर",
+            employeePhone = profile?.phone ?: "",
+            employeeEmail = profile?.email ?: "",
+            siteOrCompany = siteOrCompany.trim(),
+            extraWorkBonus = maxOf(0.0, extraWorkBonus),
+            extraWorkNote = extraWorkNote.trim(),
+            settings = currentSett,
+            stats = stats,
+            advances = monthAdvances,
+            dailyRows = dailyRows
+        )
+    }
+
+    private fun calculateSingleMonthRawNet(
+        monthKey: String,
+        att: Map<String, AttendanceRecord>,
+        ot: Map<String, Float>,
+        adv: List<AdvanceRecord>,
+        sett: UserSettings
+    ): Double {
+        var p = 0
+        var h = 0
+        var totalOt = 0f
+        var totalAdv = 0.0
+
+        att.forEach { (k, v) ->
+            if (k.startsWith(monthKey)) {
+                when (v.status) {
+                    AttendanceStatus.PRESENT -> p++
+                    AttendanceStatus.HALF -> h++
+                    else -> Unit
+                }
+            }
+        }
+        ot.forEach { (k, hrs) ->
+            if (k.startsWith(monthKey)) totalOt += hrs
+        }
+        adv.forEach {
+            if (it.dateKey.startsWith(monthKey)) totalAdv += it.amount
+        }
+
+        val workDays = if (sett.workDays > 0) sett.workDays else 26
+        val wageMode = WageMode.fromId(sett.wageMode)
+        val perDayRate = when (wageMode) {
+            WageMode.DAILY -> sett.dailyWage
+            WageMode.MONTHLY -> if (sett.salary > 0) sett.salary / workDays else 0.0
+        }
+        val baseEarnings = (p * perDayRate) + (h * (perDayRate / 2.0))
+        val otEarnings = totalOt * sett.otRate
+        return maxOf(0.0, baseEarnings + otEarnings - totalAdv)
     }
 
     private fun calculateMonthlyStats(
@@ -350,10 +740,24 @@ class HajiriViewModel(application: Application) : AndroidViewModel(application) 
         }
 
         val workDays = if (sett.workDays > 0) sett.workDays else 26
-        val perDayRate = if (sett.salary > 0) sett.salary / workDays else 0.0
+        val wageMode = WageMode.fromId(sett.wageMode)
+        val perDayRate = when (wageMode) {
+            WageMode.DAILY -> sett.dailyWage
+            WageMode.MONTHLY -> if (sett.salary > 0) sett.salary / workDays else 0.0
+        }
         val baseEarnings = (p * perDayRate) + (h * (perDayRate / 2.0))
         val otEarnings = totalOt * sett.otRate
-        val netTakeHome = maxOf(0.0, baseEarnings + otEarnings - totalAdv)
+
+        val prevYearMonth = runCatching { YearMonth.parse(monthKey).minusMonths(1) }.getOrNull()
+        val prevMonthKey = prevYearMonth?.toString() ?: ""
+        val prevMonthTitle = if (prevYearMonth != null) DateUtils.formatHindiMonthYear(prevYearMonth) else ""
+        val prevRawBalance = if (prevMonthKey.isNotBlank()) {
+            calculateSingleMonthRawNet(prevMonthKey, att, ot, adv, sett)
+        } else 0.0
+        val isPrevReceived = prevMonthKey.isNotBlank() && prevMonthKey in sett.settledMonths
+        val carryForwardAdded = if (!isPrevReceived) prevRawBalance else 0.0
+
+        val netTakeHome = maxOf(0.0, baseEarnings + otEarnings - totalAdv + carryForwardAdded)
         val workedDays = p + (h * 0.5f)
         val totalMarked = p + a + h + l
         val pct = if (totalMarked > 0) ((workedDays / totalMarked) * 100).toInt() else 0
@@ -369,9 +773,19 @@ class HajiriViewModel(application: Application) : AndroidViewModel(application) 
             baseEarnings = baseEarnings,
             otEarnings = otEarnings,
             perDayRate = perDayRate,
+            previousMonthKey = prevMonthKey,
+            previousMonthTitle = prevMonthTitle,
+            previousMonthRawBalance = prevRawBalance,
+            isPreviousMonthReceived = isPrevReceived,
+            carryForwardAdded = carryForwardAdded,
             netTakeHome = netTakeHome,
             attendancePercentage = pct,
             workedDays = workedDays
         )
+    }
+
+    private companion object {
+        const val TAG = "HajiriVM"
+        const val STOP_TIMEOUT_MILLIS = 5000L
     }
 }

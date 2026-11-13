@@ -1,8 +1,23 @@
-# हाजिरी (Hajiri) — Android Attendance & Salary Tracker
+# 📋 हाजिरी (Hajiri) — Android Attendance & Salary Tracker
 
-A modern, native Android application built with **Kotlin** and **Jetpack Compose** (Material 3) for tracking daily attendance, overtime, salary, advances, and monthly reports in Hindi.
+[![Download Latest APK](https://img.shields.io/badge/📱_Download_APK-GitHub_Releases-10B981?style=for-the-badge)](../../releases/latest)
+[![Direct APK Download](https://img.shields.io/badge/⬇️_Direct_APK-Hajiri_v1.1-4F46E5?style=for-the-badge)](../../raw/HEAD/Hajiri-Release-v1.1.apk)
+[![GitHub Actions Build](https://img.shields.io/badge/⚙️_Actions-Auto_Release-0EA5E9?style=for-the-badge)](../../actions)
 
-## Features
+---
+
+### 📥 ऐप डाउनलोड कैसे करें? (How to Download & Install)
+
+1. **Releases बटन से (Recommended):** ऊपर हरे रंग के **[📱 Download APK — GitHub Releases](../../releases/latest)** बटन पर क्लिक करें (या दाईं ओर **Releases** सेक्शन खोलें) और **`Hajiri-v1.1-Release.apk`** डाउनलोड करें।
+2. **सीधा फाइल डाउनलोड:** आप ऊपर नीले **[⬇️ Direct APK](../../raw/HEAD/Hajiri-Release-v1.1.apk)** बटन या [Hajiri-Release-v1.1.apk](./Hajiri-Release-v1.1.apk) से भी सीधे APK डाउनलोड कर सकते हैं।
+3. **ऐप के अंदर से ऑटो अपडेट:** ऐप खोलने पर नया GitHub Release अपने आप चेक होता है और 1-Click में नया APK डाउनलोड लिंक खुल जाता है।
+4. डाउनलोड के बाद अपने Android फोन में APK फाइल पर टैप करके **Install** करें।
+
+---
+
+## ✨ Features
+
+A modern, native Android application built with **Kotlin** and **Jetpack Compose** (Material 3) featuring an **iPhone 18 Liquid Glass Light Theme** for tracking daily attendance, overtime, salary, advances, and monthly reports in Hindi.
 
 - **Daily Attendance Marking (आज की हाजिरी):**
   - One-tap marking for Present (हाजिर), Absent (गैरहाजिर), Half Day (आधा दिन), and Leave (छुट्टी).
@@ -43,12 +58,13 @@ A modern, native Android application built with **Kotlin** and **Jetpack Compose
   - Chronological list of attendance records per month with notes and OT.
   - Tap to edit or update directly from history.
 
-- **Settings & User Management (⚙️ सेटिंग्स):**
-  - Custom monthly salary and OT hourly rate.
-  - Working days per month setting.
-  - User login, registration, and offline mode.
+- **Firebase Cloud Sync & Google Account (☁️ क्लाउड सिंक):**
+  - Secure Google Sign-In via Jetpack Credential Manager.
+  - Real-time Cloud Firestore sync scoped per user — attendance, OT, advances, and salary settings stay safe even if you uninstall the app or switch phones.
+  - Custom profile name and optional mobile number stored privately in your cloud profile.
   - Data reset controls for clearing month data or all data.
 
-- **Design & Offline-First Storage:**
-  - Dark glassmorphism theme with modern typography.
-  - SharedPreferences and reactive StateFlow persistence with `kotlinx.serialization`.
+- **Design & Modern Android Architecture:**
+  - **iPhone 18 Liquid Glass Light Theme** with frosted acrylic cards, pastel iridescent backdrop, and floating liquid dock.
+  - Kotlin, Jetpack Compose (Material 3), Coroutines/Flow, Firebase Auth, and Cloud Firestore with offline caching.
+

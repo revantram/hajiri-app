@@ -1,0 +1,188 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Authenticated user's profile and optional mobile number metadata",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Firebase Auth UID of the owner"
+        },
+        "name": {
+          "type": "string",
+          "description": "Display name from Google account or customized by user"
+        },
+        "email": {
+          "type": "string",
+          "description": "Email address from Google account"
+        },
+        "phone": {
+          "type": "string",
+          "description": "Optional 10-digit mobile number associated with the user"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Creation server timestamp (FieldValue.serverTimestamp())"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Last update server timestamp (FieldValue.serverTimestamp())"
+        }
+      },
+      "required": ["userId", "name", "createdAt", "updatedAt"]
+    },
+    "UserSettings": {
+      "title": "UserSettings",
+      "description": "Monthly/daily wage settings, overtime rate, work days, and app theme configuration",
+      "type": "object",
+      "properties": {
+        "salary": {
+          "type": "number",
+          "description": "Monthly base salary in INR"
+        },
+        "dailyWage": {
+          "type": "number",
+          "description": "Daily wage rate in INR when wageMode is daily"
+        },
+        "wageMode": {
+          "type": "string",
+          "enum": ["monthly", "daily"],
+          "description": "Salary calculation mode: monthly or daily"
+        },
+        "otRate": {
+          "type": "number",
+          "description": "Overtime hourly rate in INR"
+        },
+        "workDays": {
+          "type": "integer",
+          "description": "Working days in a month (1 to 31)"
+        },
+        "themeStyle": {
+          "type": "string",
+          "enum": ["liquid_light", "ocean_glass", "rose_gold", "liquid_dark"],
+          "description": "Selected UI theme style"
+        },
+        "settledMonths": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "List of YYYY-MM month keys whose remaining salary has already been received/paid"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Creation server timestamp (FieldValue.serverTimestamp())"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Last update server timestamp (FieldValue.serverTimestamp())"
+        }
+      },
+      "required": ["salary", "otRate", "workDays", "createdAt", "updatedAt"]
+    },
+    "AttendanceRecord": {
+      "title": "AttendanceRecord",
+      "description": "Daily attendance status and optional note keyed by YYYY-MM-DD",
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["present", "absent", "half", "leave"],
+          "description": "Attendance status ID"
+        },
+        "note": {
+          "type": "string",
+          "description": "Optional daily note"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Creation server timestamp (FieldValue.serverTimestamp())"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Last update server timestamp (FieldValue.serverTimestamp())"
+        }
+      },
+      "required": ["status", "note", "createdAt", "updatedAt"]
+    },
+    "OvertimeRecord": {
+      "title": "OvertimeRecord",
+      "description": "Daily overtime hours keyed by YYYY-MM-DD",
+      "type": "object",
+      "properties": {
+        "hours": {
+          "type": "number",
+          "description": "Overtime hours worked on that date"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Creation server timestamp (FieldValue.serverTimestamp())"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Last update server timestamp (FieldValue.serverTimestamp())"
+        }
+      },
+      "required": ["hours", "createdAt", "updatedAt"]
+    },
+    "AdvanceRecord": {
+      "title": "AdvanceRecord",
+      "description": "Salary advance or loan entry",
+      "type": "object",
+      "properties": {
+        "amount": {
+          "type": "number",
+          "description": "Advance amount in INR"
+        },
+        "reason": {
+          "type": "string",
+          "description": "Reason or description for the advance"
+        },
+        "dateKey": {
+          "type": "string",
+          "description": "Date of advance in YYYY-MM-DD format"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Creation server timestamp (FieldValue.serverTimestamp())"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Last update server timestamp (FieldValue.serverTimestamp())"
+        }
+      },
+      "required": ["amount", "reason", "dateKey", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Authenticated user profile document isolated by Firebase UID"
+    },
+    "/users/{userId}/settings/{settingId}": {
+      "schema": { "$ref": "#/entities/UserSettings" },
+      "description": "User salary, daily wage, work-day, and theme preferences (document ID: default)"
+    },
+    "/users/{userId}/attendance/{dateKey}": {
+      "schema": { "$ref": "#/entities/AttendanceRecord" },
+      "description": "User daily attendance records keyed by YYYY-MM-DD"
+    },
+    "/users/{userId}/overtime/{dateKey}": {
+      "schema": { "$ref": "#/entities/OvertimeRecord" },
+      "description": "User daily overtime hours keyed by YYYY-MM-DD"
+    },
+    "/users/{userId}/advances/{advanceId}": {
+      "schema": { "$ref": "#/entities/AdvanceRecord" },
+      "description": "User advance/loan entries"
+    }
+  }
+}

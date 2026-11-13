@@ -1,0 +1,220 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net: default-deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Global Primitives
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidDateKey(val) {
+      return val is string && val.size() == 10 && val.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Validation Helpers
+    function isValidUserProfile(data, userId) {
+      return data.userId is string &&
+             data.userId == userId &&
+             data.userId == request.auth.uid &&
+             data.userId.size() <= 128 &&
+             data.name is string &&
+             data.name.size() <= 100 &&
+             (!('email' in data) || data.email == null || (data.email is string && data.email.size() <= 150)) &&
+             (!('phone' in data) || data.phone == null || (data.phone is string && data.phone.size() <= 20)) &&
+             data.createdAt is timestamp &&
+             data.createdAt <= request.time &&
+             data.updatedAt is timestamp &&
+             data.updatedAt <= request.time;
+    }
+
+    function isValidUserSettings(data) {
+      return (data.salary is int || data.salary is float) &&
+             data.salary >= 0 &&
+             data.salary <= 100000000 &&
+             (!('dailyWage' in data) || ((data.dailyWage is int || data.dailyWage is float) && data.dailyWage >= 0 && data.dailyWage <= 10000000)) &&
+             (!('wageMode' in data) || (data.wageMode is string && data.wageMode in ['monthly', 'daily'])) &&
+             (data.otRate is int || data.otRate is float) &&
+             data.otRate >= 0 &&
+             data.otRate <= 1000000 &&
+             data.workDays is int &&
+             data.workDays >= 1 &&
+             data.workDays <= 31 &&
+             (!('themeStyle' in data) || (data.themeStyle is string && data.themeStyle in ['liquid_light', 'ocean_glass', 'rose_gold', 'liquid_dark'])) &&
+             (!('settledMonths' in data) || (data.settledMonths is list && data.settledMonths.size() <= 120)) &&
+             data.createdAt is timestamp &&
+             data.createdAt <= request.time &&
+             data.updatedAt is timestamp &&
+             data.updatedAt <= request.time;
+    }
+
+    function isValidAttendanceRecord(data) {
+      return data.status is string &&
+             data.status in ['present', 'absent', 'half', 'leave'] &&
+             data.note is string &&
+             data.note.size() <= 500 &&
+             data.createdAt is timestamp &&
+             data.createdAt <= request.time &&
+             data.updatedAt is timestamp &&
+             data.updatedAt <= request.time;
+    }
+
+    function isValidOvertimeRecord(data) {
+      return (data.hours is int || data.hours is float) &&
+             data.hours > 0 &&
+             data.hours <= 24 &&
+             data.createdAt is timestamp &&
+             data.createdAt <= request.time &&
+             data.updatedAt is timestamp &&
+             data.updatedAt <= request.time;
+    }
+
+    function isValidAdvanceRecord(data) {
+      return (data.amount is int || data.amount is float) &&
+             data.amount > 0 &&
+             data.amount <= 10000000 &&
+             data.reason is string &&
+             data.reason.size() <= 200 &&
+             isValidDateKey(data.dateKey) &&
+             data.createdAt is timestamp &&
+             data.createdAt <= request.time &&
+             data.updatedAt is timestamp &&
+             data.updatedAt <= request.time;
+    }
+
+    // User Profile Document
+    match /users/{userId} {
+      allow get: if isOwner(userId) && isValidId(userId);
+      allow list: if isOwner(userId);
+
+      allow create: if isSignedIn() &&
+                       isValidId(userId) &&
+                       isValidUserProfile(incoming(), userId) &&
+                       incoming().keys().hasAll(['userId', 'name', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['userId', 'name', 'email', 'phone', 'createdAt', 'updatedAt']);
+
+      allow update: if isSignedIn() &&
+                       isValidId(userId) &&
+                       isValidUserProfile(incoming(), userId) &&
+                       request.auth.uid == userId &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['name', 'email', 'phone', 'updatedAt']);
+
+      allow delete: if isOwner(userId) && isValidId(userId);
+
+      // User Settings Subcollection (docId = "default")
+      match /settings/{settingId} {
+        allow get: if isOwner(userId) && isValidId(settingId);
+        allow list: if isOwner(userId);
+
+        allow create: if isSignedIn() &&
+                         isValidId(settingId) &&
+                         isValidUserSettings(incoming()) &&
+                         request.auth.uid == userId &&
+                         incoming().keys().hasAll(['salary', 'otRate', 'workDays', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['salary', 'dailyWage', 'wageMode', 'otRate', 'workDays', 'themeStyle', 'settledMonths', 'createdAt', 'updatedAt']);
+
+        allow update: if isSignedIn() &&
+                         isValidId(settingId) &&
+                         isValidUserSettings(incoming()) &&
+                         request.auth.uid == userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['salary', 'dailyWage', 'wageMode', 'otRate', 'workDays', 'themeStyle', 'settledMonths', 'updatedAt']);
+
+        allow delete: if isOwner(userId) && isValidId(settingId);
+      }
+
+      // Daily Attendance Subcollection (docId = YYYY-MM-DD)
+      match /attendance/{dateKey} {
+        allow get: if isOwner(userId) && isValidId(dateKey) && isValidDateKey(dateKey);
+        allow list: if isOwner(userId);
+
+        allow create: if isSignedIn() &&
+                         isValidId(dateKey) &&
+                         isValidDateKey(dateKey) &&
+                         isValidAttendanceRecord(incoming()) &&
+                         request.auth.uid == userId &&
+                         incoming().keys().hasAll(['status', 'note', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['status', 'note', 'createdAt', 'updatedAt']);
+
+        allow update: if isSignedIn() &&
+                         isValidId(dateKey) &&
+                         isValidDateKey(dateKey) &&
+                         isValidAttendanceRecord(incoming()) &&
+                         request.auth.uid == userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['status', 'note', 'updatedAt']);
+
+        allow delete: if isOwner(userId) && isValidId(dateKey) && isValidDateKey(dateKey);
+      }
+
+      // Daily Overtime Subcollection (docId = YYYY-MM-DD)
+      match /overtime/{dateKey} {
+        allow get: if isOwner(userId) && isValidId(dateKey) && isValidDateKey(dateKey);
+        allow list: if isOwner(userId);
+
+        allow create: if isSignedIn() &&
+                         isValidId(dateKey) &&
+                         isValidDateKey(dateKey) &&
+                         isValidOvertimeRecord(incoming()) &&
+                         request.auth.uid == userId &&
+                         incoming().keys().hasAll(['hours', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['hours', 'createdAt', 'updatedAt']);
+
+        allow update: if isSignedIn() &&
+                         isValidId(dateKey) &&
+                         isValidDateKey(dateKey) &&
+                         isValidOvertimeRecord(incoming()) &&
+                         request.auth.uid == userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['hours', 'updatedAt']);
+
+        allow delete: if isOwner(userId) && isValidId(dateKey) && isValidDateKey(dateKey);
+      }
+
+      // Advances / Loans Subcollection
+      match /advances/{advanceId} {
+        allow get: if isOwner(userId) && isValidId(advanceId);
+        allow list: if isOwner(userId);
+
+        allow create: if isSignedIn() &&
+                         isValidId(advanceId) &&
+                         isValidAdvanceRecord(incoming()) &&
+                         request.auth.uid == userId &&
+                         incoming().keys().hasAll(['amount', 'reason', 'dateKey', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['amount', 'reason', 'dateKey', 'createdAt', 'updatedAt']);
+
+        allow update: if isSignedIn() &&
+                         isValidId(advanceId) &&
+                         isValidAdvanceRecord(incoming()) &&
+                         request.auth.uid == userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['amount', 'reason', 'dateKey', 'updatedAt']);
+
+        allow delete: if isOwner(userId) && isValidId(advanceId);
+      }
+    }
+  }
+}
