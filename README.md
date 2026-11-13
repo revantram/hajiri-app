@@ -1,15 +1,15 @@
 # 📋 हाजिरी (Hajiri) — Android Attendance & Salary Tracker
 
 [![Download Latest APK](https://img.shields.io/badge/📱_Download_APK-GitHub_Releases-10B981?style=for-the-badge)](../../releases/latest)
-[![Direct APK Download](https://img.shields.io/badge/⬇️_Direct_APK-Hajiri_v1.1-4F46E5?style=for-the-badge)](../../raw/HEAD/Hajiri-Release-v1.1.apk)
+[![Direct APK Download](https://img.shields.io/badge/⬇️_Direct_APK-Hajiri_v1.2-4F46E5?style=for-the-badge)](../../raw/HEAD/Hajiri-Release-v1.2.apk)
 [![GitHub Actions Build](https://img.shields.io/badge/⚙️_Actions-Auto_Release-0EA5E9?style=for-the-badge)](../../actions)
 
 ---
 
 ### 📥 ऐप डाउनलोड कैसे करें? (How to Download & Install)
 
-1. **Releases बटन से (Recommended):** ऊपर हरे रंग के **[📱 Download APK — GitHub Releases](../../releases/latest)** बटन पर क्लिक करें (या दाईं ओर **Releases** सेक्शन खोलें) और **`Hajiri-v1.1-Release.apk`** डाउनलोड करें।
-2. **सीधा फाइल डाउनलोड:** आप ऊपर नीले **[⬇️ Direct APK](../../raw/HEAD/Hajiri-Release-v1.1.apk)** बटन या [Hajiri-Release-v1.1.apk](./Hajiri-Release-v1.1.apk) से भी सीधे APK डाउनलोड कर सकते हैं।
+1. **Releases बटन से (Recommended):** ऊपर हरे रंग के **[📱 Download APK — GitHub Releases](../../releases/latest)** बटन पर क्लिक करें (या दाईं ओर **Releases** सेक्शन खोलें) और **`Hajiri-v1.2-Release.apk`** डाउनलोड करें।
+2. **सीधा फाइल डाउनलोड:** आप ऊपर नीले **[⬇️ Direct APK](../../raw/HEAD/Hajiri-Release-v1.2.apk)** बटन या [Hajiri-Release-v1.2.apk](./Hajiri-Release-v1.2.apk) से भी सीधे APK डाउनलोड कर सकते हैं।
 3. **ऐप के अंदर से ऑटो अपडेट:** ऐप खोलने पर नया GitHub Release अपने आप चेक होता है और 1-Click में नया APK डाउनलोड लिंक खुल जाता है।
 4. डाउनलोड के बाद अपने Android फोन में APK फाइल पर टैप करके **Install** करें।
 

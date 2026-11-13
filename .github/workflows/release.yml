@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Release version tag (e.g. v1.0.1)"
+        description: "Release version tag (e.g. v1.2)"
         required: false
         default: ""
 
@@ -25,26 +25,65 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      - name: Read App Version from Gradle
+        id: ver
+        run: |
+          APP_VER=$(grep -E 'versionName\s*=' app/build.gradle.kts | head -n1 | sed -E 's/.*"([^"]+)".*/\1/')
+          APP_VER=${APP_VER:-1.2}
+          echo "version=$APP_VER" >> "$GITHUB_OUTPUT"
+
+      - name: Check Firebase Config for Source Build
+        id: cfg
+        env:
+          GOOGLE_SERVICES_B64: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: |
+          if [ ! -f "app/google-services.json" ] && [ -n "$GOOGLE_SERVICES_B64" ]; then
+            echo "$GOOGLE_SERVICES_B64" | base64 -d > app/google-services.json
+          fi
+          if [ -f "app/google-services.json" ]; then
+            echo "can_build=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "can_build=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Set up JDK 21
+        if: steps.cfg.outputs.can_build == 'true'
         uses: actions/setup-java@v4
         with:
           java-version: "21"
           distribution: "temurin"
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install Android 36 SDK & Build Tools
+      - name: Prepare Android SDK & Install Build Tools
+        if: steps.cfg.outputs.can_build == 'true'
         run: |
-          yes | sdkmanager --licenses > /dev/null 2>&1 || true
-          sdkmanager "platforms;android-36" "build-tools;36.0.0"
+          SDK_DIR="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          export ANDROID_HOME="$SDK_DIR"
+          export ANDROID_SDK_ROOT="$SDK_DIR"
+          echo "ANDROID_HOME=$SDK_DIR" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK_DIR" >> "$GITHUB_ENV"
+
+          SDKMANAGER="$SDK_DIR/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$SDKMANAGER" ]; then
+            SDKMANAGER=$(find "$SDK_DIR" -name sdkmanager -type f 2>/dev/null | head -n1 || true)
+          fi
+          if [ -z "$SDKMANAGER" ] || [ ! -x "$SDKMANAGER" ]; then
+            mkdir -p "$SDK_DIR/cmdline-tools"
+            curl -sSL "https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip" -o /tmp/cmdline-tools.zip
+            unzip -q /tmp/cmdline-tools.zip -d /tmp/cmdline-extract
+            mv /tmp/cmdline-extract/cmdline-tools "$SDK_DIR/cmdline-tools/latest"
+            SDKMANAGER="$SDK_DIR/cmdline-tools/latest/bin/sdkmanager"
+          fi
+          yes | "$SDKMANAGER" --sdk_root="$SDK_DIR" --licenses > /dev/null 2>&1 || true
+          "$SDKMANAGER" --sdk_root="$SDK_DIR" "platforms;android-36" "build-tools;36.0.0"
 
       - name: Set up Gradle 9.3.1
+        if: steps.cfg.outputs.can_build == 'true'
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "9.3.1"
 
       - name: Ensure debug.keystore exists
+        if: steps.cfg.outputs.can_build == 'true'
         run: |
           if [ ! -f "debug.keystore" ]; then
             if [ -f "debug.keystore.base64" ]; then
@@ -62,22 +101,30 @@ jobs:
             fi
           fi
 
-      - name: Build Release & Debug APKs
+      - name: Build Release & Debug APKs from Source
+        if: steps.cfg.outputs.can_build == 'true'
         run: gradle assembleRelease assembleDebug --no-daemon
-
-      - name: Read App Version from Gradle
-        id: ver
-        run: |
-          APP_VER=$(grep -E 'versionName\s*=' app/build.gradle.kts | head -n1 | sed -E 's/.*"([^"]+)".*/\1/')
-          APP_VER=${APP_VER:-1.1}
-          echo "version=$APP_VER" >> "$GITHUB_OUTPUT"
 
       - name: Prepare Release APK Assets
         run: |
           mkdir -p release-assets
           VER="${{ steps.ver.outputs.version }}"
-          cp app/build/outputs/apk/release/app-release.apk "release-assets/Hajiri-v${VER}-Release.apk"
-          cp app/build/outputs/apk/debug/app-debug.apk "release-assets/Hajiri-v${VER}-Debug.apk"
+          if [ -f "app/build/outputs/apk/release/app-release.apk" ]; then
+            cp app/build/outputs/apk/release/app-release.apk "release-assets/Hajiri-v${VER}-Release.apk"
+          elif [ -f "Hajiri-Release-v${VER}.apk" ]; then
+            cp "Hajiri-Release-v${VER}.apk" "release-assets/Hajiri-v${VER}-Release.apk"
+          else
+            LATEST_ROOT_APK=$(ls -1t Hajiri-Release-v*.apk 2>/dev/null | head -n1 || true)
+            if [ -n "$LATEST_ROOT_APK" ]; then
+              cp "$LATEST_ROOT_APK" "release-assets/Hajiri-v${VER}-Release.apk"
+            else
+              echo "Error: No release APK found to publish"
+              exit 1
+            fi
+          fi
+          if [ -f "app/build/outputs/apk/debug/app-debug.apk" ]; then
+            cp app/build/outputs/apk/debug/app-debug.apk "release-assets/Hajiri-v${VER}-Debug.apk"
+          fi
           ls -lh release-assets/
 
       - name: Upload APK Artifacts
@@ -95,7 +142,7 @@ jobs:
           elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
             echo "tag=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
           else
-            echo "tag=v${VER}.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+            echo "tag=v${VER}" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Publish GitHub Release
@@ -112,7 +159,6 @@ jobs:
             नीचे **Assets** से **`Hajiri-v${{ steps.ver.outputs.version }}-Release.apk`** पर क्लिक करके सीधे अपने Android फोन में डाउनलोड और इंस्टॉल करें। ऐप के अंदर **ऑटो अपडेट** भी इसी GitHub Release से नया वर्ज़न अपने आप पहचान लेता है।
 
             - **`Hajiri-v${{ steps.ver.outputs.version }}-Release.apk`** — मुख्य रिलीज़ ऐप (Recommended)
-            - **`Hajiri-v${{ steps.ver.outputs.version }}-Debug.apk`** — डीबग बिल्ड
           files: |
             release-assets/*.apk
         env:
