@@ -41,13 +41,17 @@ jobs:
             if printf '%s' "$GOOGLE_SERVICES_RAW" | grep -q '"project_info"'; then
               printf '%s\n' "$GOOGLE_SERVICES_RAW" > app/google-services.json
             else
-              printf '%s' "$GOOGLE_SERVICES_RAW" | tr -d '\n\r ' | base64 -d > app/google-services.json
+              printf '%s' "$GOOGLE_SERVICES_RAW" | tr -d '[:space:]' | base64 -d > app/google-services.json
             fi
           fi
           if [ -f "app/google-services.json" ]; then
+            if ! python3 -m json.tool app/google-services.json > /dev/null 2>&1; then
+              echo "::error::GOOGLE_SERVICES_JSON valid JSON nahi hai. Poori app/google-services.json file copy karke dubara paste karein."
+              exit 1
+            fi
             echo "can_build=true" >> "$GITHUB_OUTPUT"
           else
-            echo "::error::app/google-services.json missing! Add GitHub Secret GOOGLE_SERVICES_JSON (paste contents of app/google-services.json) in Repo Settings -> Secrets and variables -> Actions."
+            echo "::error::app/google-services.json missing! Add GitHub Secret GOOGLE_SERVICES_JSON in Repo Settings -> Secrets and variables -> Actions."
             echo "can_build=false" >> "$GITHUB_OUTPUT"
             exit 1
           fi
@@ -95,9 +99,16 @@ jobs:
         run: |
           if [ ! -f "debug.keystore" ]; then
             if [ -n "$DEBUG_KEYSTORE_SECRET" ]; then
-              printf '%s' "$DEBUG_KEYSTORE_SECRET" | tr -d '\n\r ' | base64 -d > debug.keystore
+              if ! python3 -c 'import base64,os,re; raw=os.environ.get("DEBUG_KEYSTORE_SECRET",""); cleaned=re.sub(r"\s+","",re.sub(r"^\s*\d+:\s*","",raw).strip().strip("\"").strip("\x27")); print("DEBUG_KEYSTORE_B64 cleaned len=",len(cleaned)); data=base64.b64decode(cleaned,validate=True); open("debug.keystore","wb").write(data); print("Decoded bytes=",len(data))'; then
+                echo "::error::DEBUG_KEYSTORE_B64 invalid base64! Expected 3536 chars from debug.keystore.base64."
+                exit 1
+              fi
+              if ! keytool -list -keystore debug.keystore -storepass android > /dev/null 2>&1; then
+                echo "::error::Decoded DEBUG_KEYSTORE_B64 is not a valid Android keystore! Re-copy full debug.keystore.base64."
+                exit 1
+              fi
             elif [ -f "debug.keystore.base64" ]; then
-              tr -d '\n\r ' < debug.keystore.base64 | base64 -d > debug.keystore
+              tr -d '[:space:]' < debug.keystore.base64 | base64 -d > debug.keystore
             else
               echo "::warning::DEBUG_KEYSTORE_B64 secret not set; generating temporary keystore (Google Sign-In & updating over previous APK may fail)."
               keytool -genkeypair -v \
