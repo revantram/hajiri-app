@@ -35,15 +35,21 @@ jobs:
       - name: Check Firebase Config for Source Build
         id: cfg
         env:
-          GOOGLE_SERVICES_B64: ${{ secrets.GOOGLE_SERVICES_JSON }}
+          GOOGLE_SERVICES_RAW: ${{ secrets.GOOGLE_SERVICES_JSON }}
         run: |
-          if [ ! -f "app/google-services.json" ] && [ -n "$GOOGLE_SERVICES_B64" ]; then
-            echo "$GOOGLE_SERVICES_B64" | base64 -d > app/google-services.json
+          if [ ! -f "app/google-services.json" ] && [ -n "$GOOGLE_SERVICES_RAW" ]; then
+            if printf '%s' "$GOOGLE_SERVICES_RAW" | grep -q '"project_info"'; then
+              printf '%s\n' "$GOOGLE_SERVICES_RAW" > app/google-services.json
+            else
+              printf '%s' "$GOOGLE_SERVICES_RAW" | tr -d '\n\r ' | base64 -d > app/google-services.json
+            fi
           fi
           if [ -f "app/google-services.json" ]; then
             echo "can_build=true" >> "$GITHUB_OUTPUT"
           else
+            echo "::error::app/google-services.json missing! Add GitHub Secret GOOGLE_SERVICES_JSON (paste contents of app/google-services.json) in Repo Settings -> Secrets and variables -> Actions."
             echo "can_build=false" >> "$GITHUB_OUTPUT"
+            exit 1
           fi
 
       - name: Set up JDK 21
@@ -84,11 +90,16 @@ jobs:
 
       - name: Ensure debug.keystore exists
         if: steps.cfg.outputs.can_build == 'true'
+        env:
+          DEBUG_KEYSTORE_SECRET: ${{ secrets.DEBUG_KEYSTORE_B64 }}
         run: |
           if [ ! -f "debug.keystore" ]; then
-            if [ -f "debug.keystore.base64" ]; then
-              base64 -d debug.keystore.base64 > debug.keystore
+            if [ -n "$DEBUG_KEYSTORE_SECRET" ]; then
+              printf '%s' "$DEBUG_KEYSTORE_SECRET" | tr -d '\n\r ' | base64 -d > debug.keystore
+            elif [ -f "debug.keystore.base64" ]; then
+              tr -d '\n\r ' < debug.keystore.base64 | base64 -d > debug.keystore
             else
+              echo "::warning::DEBUG_KEYSTORE_B64 secret not set; generating temporary keystore (Google Sign-In & updating over previous APK may fail)."
               keytool -genkeypair -v \
                 -keystore debug.keystore \
                 -storepass android \
