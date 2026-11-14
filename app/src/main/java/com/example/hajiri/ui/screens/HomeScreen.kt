@@ -959,7 +959,9 @@ fun HomeScreen(
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
                     color = palette.accent,
-                    modifier = Modifier.clickable { viewModel.setTab(HajiriTab.HISTORY) }
+                    modifier = Modifier
+                        .clickable { viewModel.openHistoryScreen() }
+                        .testTag("home_see_all_history_btn")
                 )
             }
         }

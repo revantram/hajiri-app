@@ -358,3 +358,138 @@ test("Settings & Advances: owner CRUD succeeds; cross-user and invalid payloads 
       })
   );
 });
+
+test("Expenses: owner CRUD succeeds; rejects invalid amount/category/dateKey, createdAt mutation, shadow fields & cross-user", async () => {
+  const aliceDb = testEnv.authenticatedContext(ALICE_UID).firestore();
+  const bobDb = testEnv.authenticatedContext(BOB_UID).firestore();
+  const unauthDb = testEnv.unauthenticatedContext().firestore();
+  const created = validTimestamp();
+
+  const expRef = aliceDb
+    .collection("users")
+    .doc(ALICE_UID)
+    .collection("expenses")
+    .doc("exp_1");
+
+  await assertSucceeds(
+    expRef.set({
+      amount: 150,
+      category: "food",
+      note: "दोपहर का खाना और चाय",
+      dateKey: "2026-11-14",
+      siteId: "default",
+      createdAt: created,
+      updatedAt: created,
+    })
+  );
+
+  // Owner can list & get
+  await assertSucceeds(expRef.get());
+  await assertSucceeds(
+    aliceDb.collection("users").doc(ALICE_UID).collection("expenses").get()
+  );
+
+  // Owner can update allowed fields keeping createdAt intact
+  await assertSucceeds(
+    expRef.update({
+      amount: 220,
+      category: "transport",
+      note: "पेट्रोल और नाश्ता",
+      updatedAt: validTimestamp(),
+    })
+  );
+
+  // Rejects mutating createdAt on update
+  await assertFails(
+    expRef.update({
+      createdAt: validTimestamp(),
+      updatedAt: validTimestamp(),
+    })
+  );
+
+  // Rejects unknown shadow field
+  await assertFails(
+    expRef.update({
+      extraHackField: "nope",
+      updatedAt: validTimestamp(),
+    })
+  );
+
+  // Rejects <= 0 amount
+  await assertFails(
+    aliceDb
+      .collection("users")
+      .doc(ALICE_UID)
+      .collection("expenses")
+      .doc("exp_bad_amt")
+      .set({
+        amount: 0,
+        category: "food",
+        note: "free",
+        dateKey: "2026-11-14",
+        createdAt: validTimestamp(),
+        updatedAt: validTimestamp(),
+      })
+  );
+
+  // Rejects invalid category
+  await assertFails(
+    aliceDb
+      .collection("users")
+      .doc(ALICE_UID)
+      .collection("expenses")
+      .doc("exp_bad_cat")
+      .set({
+        amount: 100,
+        category: "luxury",
+        note: "invalid",
+        dateKey: "2026-11-14",
+        createdAt: validTimestamp(),
+        updatedAt: validTimestamp(),
+      })
+  );
+
+  // Rejects invalid dateKey format
+  await assertFails(
+    aliceDb
+      .collection("users")
+      .doc(ALICE_UID)
+      .collection("expenses")
+      .doc("exp_bad_date")
+      .set({
+        amount: 100,
+        category: "tools",
+        note: "हथौड़ा",
+        dateKey: "14-11-2026",
+        createdAt: validTimestamp(),
+        updatedAt: validTimestamp(),
+      })
+  );
+
+  // Cross-user and unauthenticated reads/writes fail
+  await assertFails(
+    bobDb
+      .collection("users")
+      .doc(ALICE_UID)
+      .collection("expenses")
+      .doc("exp_1")
+      .get()
+  );
+  await assertFails(
+    bobDb.collection("users").doc(ALICE_UID).collection("expenses").get()
+  );
+  await assertFails(
+    bobDb
+      .collection("users")
+      .doc(ALICE_UID)
+      .collection("expenses")
+      .doc("exp_1")
+      .delete()
+  );
+  await assertFails(
+    unauthDb.collection("users").doc(ALICE_UID).collection("expenses").get()
+  );
+
+  // Owner can delete
+  await assertSucceeds(expRef.delete());
+});

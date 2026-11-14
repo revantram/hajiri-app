@@ -210,6 +210,93 @@ class HajiriRepositoryRuleTest : FirestoreEmulatorTestBase() {
         assertEquals(FirebaseFirestoreException.Code.PERMISSION_DENIED, firestoreException.code)
     }
 
+    @Test
+    fun expenses_authenticatedOwner_createsUpdatesObservesAndDeletes() = runBlocking {
+        val uid = signInTestUser(ALICE_EMAIL)
+        val repository = HajiriRepository(firestore, auth)
+
+        val expId = withTimeout(DEFAULT_TIMEOUT_MS) {
+            repository.addExpense(
+                amount = 150.0,
+                category = com.example.hajiri.model.ExpenseCategory.FOOD,
+                note = "चाय और नाश्ता",
+                dateKey = "2026-11-14",
+                siteId = "default"
+            )
+        }
+
+        val observed = withTimeout(FLOW_TIMEOUT_MS) {
+            repository.observeExpenses(uid).first { list -> list.any { it.id == expId } }
+        }
+        val created = observed.first { it.id == expId }
+        assertEquals(150.0, created.amount, 0.01)
+        assertEquals(com.example.hajiri.model.ExpenseCategory.FOOD.id, created.category)
+        assertEquals("चाय और नाश्ता", created.note)
+        assertEquals("2026-11-14", created.dateKey)
+
+        withTimeout(DEFAULT_TIMEOUT_MS) {
+            repository.updateExpense(
+                id = expId,
+                amount = 280.0,
+                category = com.example.hajiri.model.ExpenseCategory.TRANSPORT,
+                note = "बाइक पेट्रोल",
+                dateKey = "2026-11-14",
+                siteId = "default"
+            )
+        }
+        val updated = withTimeout(FLOW_TIMEOUT_MS) {
+            repository.observeExpenses(uid).first { list ->
+                list.any { it.id == expId && it.amount == 280.0 && it.category == com.example.hajiri.model.ExpenseCategory.TRANSPORT.id }
+            }
+        }
+        assertEquals("बाइक पेट्रोल", updated.first { it.id == expId }.note)
+
+        withTimeout(DEFAULT_TIMEOUT_MS) {
+            repository.deleteExpense(expId)
+        }
+        val afterDelete = withTimeout(FLOW_TIMEOUT_MS) {
+            repository.observeExpenses(uid).first { list -> list.none { it.id == expId } }
+        }
+        assertTrue(afterDelete.none { it.id == expId })
+    }
+
+    @Test
+    fun observeExpenses_crossUserAndUnauthenticated_failWithPermissionDenied() = runBlocking {
+        val aliceUid = signInTestUser(ALICE_EMAIL)
+        val aliceRepo = HajiriRepository(firestore, auth)
+        withTimeout(DEFAULT_TIMEOUT_MS) {
+            aliceRepo.addExpense(
+                amount = 500.0,
+                category = com.example.hajiri.model.ExpenseCategory.GROCERY,
+                note = "राशन",
+                dateKey = "2026-11-14"
+            )
+        }
+
+        signInTestUser(BOB_EMAIL)
+        val bobRepo = HajiriRepository(firestore, auth)
+        val crossEx = assertThrowsAsync<Exception> {
+            withTimeout(FLOW_TIMEOUT_MS) {
+                bobRepo.observeExpenses(aliceUid).first()
+            }
+        }
+        assertEquals(
+            FirebaseFirestoreException.Code.PERMISSION_DENIED,
+            crossEx.unwrapFirestoreException()?.code
+        )
+
+        auth.signOut()
+        val unauthEx = assertThrowsAsync<Exception> {
+            withTimeout(FLOW_TIMEOUT_MS) {
+                bobRepo.observeExpenses(aliceUid).first()
+            }
+        }
+        assertEquals(
+            FirebaseFirestoreException.Code.PERMISSION_DENIED,
+            unauthEx.unwrapFirestoreException()?.code
+        )
+    }
+
     private companion object {
         const val ALICE_EMAIL = "alice.hajiri@test.com"
         const val BOB_EMAIL = "bob.hajiri@test.com"

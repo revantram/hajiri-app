@@ -8,6 +8,10 @@ import com.example.hajiri.model.AdvanceRecord
 import com.example.hajiri.model.AppThemeStyle
 import com.example.hajiri.model.AttendanceRecord
 import com.example.hajiri.model.AttendanceStatus
+import com.example.hajiri.model.CategoryExpenseBreakdown
+import com.example.hajiri.model.ExpenseCategory
+import com.example.hajiri.model.ExpenseMonthSummary
+import com.example.hajiri.model.ExpenseRecord
 import com.example.hajiri.model.MonthlyStats
 import com.example.hajiri.model.OvertimeRecord
 import com.example.hajiri.model.UserProfile
@@ -18,6 +22,7 @@ import android.content.Context
 import com.example.hajiri.util.AppUpdateChecker
 import com.example.hajiri.util.DailyReminderScheduler
 import com.example.hajiri.util.DateUtils
+import com.example.hajiri.util.ExpenseReportPdfData
 import com.example.hajiri.util.MonthlySlipDailyRow
 import com.example.hajiri.util.MonthlySlipData
 import com.example.hajiri.util.UpdateCheckState
@@ -44,7 +49,7 @@ enum class HajiriTab(val label: String, val iconText: String) {
     HOME("होम", "🏠"),
     CALENDAR("कैलेंडर", "📅"),
     REPORTS("रिपोर्ट", "📊"),
-    HISTORY("इतिहास", "📜"),
+    EXPENSE("खर्च", "💸"),
     SETTINGS("सेटिंग्स", "⚙️")
 }
 
@@ -78,6 +83,9 @@ class HajiriViewModel(
 
     private val _currentTab = MutableStateFlow(HajiriTab.HOME)
     val currentTab: StateFlow<HajiriTab> = _currentTab.asStateFlow()
+
+    private val _showHistoryScreen = MutableStateFlow(false)
+    val showHistoryScreen: StateFlow<Boolean> = _showHistoryScreen.asStateFlow()
 
     private val _toastEvent = MutableSharedFlow<String>(extraBufferCapacity = 8)
     val toastEvent: SharedFlow<String> = _toastEvent.asSharedFlow()
@@ -131,6 +139,11 @@ class HajiriViewModel(
             .guardStream(emptyList(), "advances")
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), emptyList())
 
+    val expenses: StateFlow<List<ExpenseRecord>> =
+        repository.observeExpenses(currentUserId)
+            .guardStream(emptyList(), "expenses")
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), emptyList())
+
     val settings: StateFlow<UserSettings> =
         repository.observeSettings(currentUserId)
             .guardStream(UserSettings(), "settings")
@@ -159,6 +172,9 @@ class HajiriViewModel(
 
     private val _selectedHistoryMonth = MutableStateFlow(_todayMonthKey.value)
     val selectedHistoryMonth: StateFlow<String> = _selectedHistoryMonth.asStateFlow()
+
+    private val _selectedExpenseMonth = MutableStateFlow(_todayMonthKey.value)
+    val selectedExpenseMonth: StateFlow<String> = _selectedExpenseMonth.asStateFlow()
 
     // Selected date key for Calendar day popup dialog
     private val _selectedCalendarDateKey = MutableStateFlow<String?>(null)
@@ -211,6 +227,26 @@ class HajiriViewModel(
     ) { mKey, att, otRecs, adv, sett ->
         calculateMonthlyStats(mKey, att, otRecs, adv, sett)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), MonthlyStats(_todayMonthKey.value))
+
+    // Selected Expense Month Stats & Breakdown
+    private val expenseMonthStats: StateFlow<MonthlyStats> = combine(
+        selectedExpenseMonth, attendance, overtimeRecords, advances, settings
+    ) { mKey, att, otRecs, adv, sett ->
+        calculateMonthlyStats(mKey, att, otRecs, adv, sett)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), MonthlyStats(_todayMonthKey.value))
+
+    val expenseMonthSummary: StateFlow<ExpenseMonthSummary> = combine(
+        selectedExpenseMonth, expenses, expenseMonthStats
+    ) { mKey, allExpenses, stats ->
+        calculateExpenseSummary(mKey, allExpenses, stats)
+    }.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS),
+        ExpenseMonthSummary(
+            monthKey = _todayMonthKey.value,
+            monthTitle = DateUtils.formatHindiMonthYear(_todayMonthKey.value)
+        )
+    )
 
     // 6-Month trends for report screen (anchors on selected older month if > 6 months back)
     val sixMonthTrends: StateFlow<List<MonthTrend>> = combine(
@@ -271,10 +307,10 @@ class HajiriViewModel(
 
     // Earliest year recorded in user's data so Month-Year Picker covers full history
     val earliestDataYear: StateFlow<Int> = combine(
-        todayMonthKeyState, attendance, overtimeRecords, advances
-    ) { tMonthKey, att, otRecs, adv ->
+        todayMonthKeyState, attendance, overtimeRecords, advances, expenses
+    ) { tMonthKey, att, otRecs, adv, exp ->
         val currentYear = runCatching { YearMonth.parse(tMonthKey).year }.getOrNull() ?: LocalDate.now().year
-        val minRecorded = (att.keys + otRecs.keys + adv.map { it.dateKey })
+        val minRecorded = (att.keys + otRecs.keys + adv.map { it.dateKey } + exp.map { it.dateKey })
             .mapNotNull { it.takeIf { s -> s.length >= 4 }?.substring(0, 4)?.toIntOrNull() }
             .minOrNull()
         minOf(currentYear - 4, minRecorded ?: (currentYear - 4)).coerceAtLeast(2020)
@@ -301,6 +337,9 @@ class HajiriViewModel(
             }
             if (_selectedHistoryMonth.value == previousMonthKey) {
                 _selectedHistoryMonth.value = newMonthKey
+            }
+            if (_selectedExpenseMonth.value == previousMonthKey) {
+                _selectedExpenseMonth.value = newMonthKey
             }
         }
         return true
@@ -338,7 +377,16 @@ class HajiriViewModel(
     }
 
     fun setTab(tab: HajiriTab) {
+        _showHistoryScreen.value = false
         _currentTab.value = tab
+    }
+
+    fun openHistoryScreen() {
+        _showHistoryScreen.value = true
+    }
+
+    fun closeHistoryScreen() {
+        _showHistoryScreen.value = false
     }
 
     fun markToday(status: AttendanceStatus) {
@@ -476,6 +524,95 @@ class HajiriViewModel(
 
     fun setHistoryMonth(monthKey: String) {
         _selectedHistoryMonth.value = monthKey
+    }
+
+    fun setExpenseMonth(monthKey: String) {
+        _selectedExpenseMonth.value = monthKey
+    }
+
+    fun addExpense(
+        amount: Double,
+        category: ExpenseCategory,
+        note: String,
+        dateKey: String = todayKey
+    ) {
+        viewModelScope.launch {
+            if (amount <= 0.0) {
+                _toastEvent.emit("⚠️ सही खर्च राशि डालें")
+                return@launch
+            }
+            val safeDateKey = dateKey.takeIf { DateUtils.parseDateKey(it) != null } ?: todayKey
+            try {
+                val activeSiteId = settings.value.activeSiteId.ifBlank { "default" }
+                repository.addExpense(
+                    amount = amount,
+                    category = category,
+                    note = note,
+                    dateKey = safeDateKey,
+                    siteId = activeSiteId
+                )
+                val targetMonth = safeDateKey.take(7)
+                if (targetMonth.length == 7 && targetMonth != _selectedExpenseMonth.value) {
+                    _selectedExpenseMonth.value = targetMonth
+                }
+                _toastEvent.emit("💸 ₹${DateUtils.formatInr(amount)} खर्च सेव हो गया ✓")
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                _toastEvent.emit("⚠️ खर्च सेव नहीं हो सका")
+            }
+        }
+    }
+
+    fun updateExpense(
+        id: String,
+        amount: Double,
+        category: ExpenseCategory,
+        note: String,
+        dateKey: String
+    ) {
+        if (id.isBlank()) return
+        viewModelScope.launch {
+            if (amount <= 0.0) {
+                _toastEvent.emit("⚠️ सही खर्च राशि डालें")
+                return@launch
+            }
+            val safeDateKey = dateKey.takeIf { DateUtils.parseDateKey(it) != null } ?: todayKey
+            try {
+                val activeSiteId = settings.value.activeSiteId.ifBlank { "default" }
+                repository.updateExpense(
+                    id = id,
+                    amount = amount,
+                    category = category,
+                    note = note,
+                    dateKey = safeDateKey,
+                    siteId = activeSiteId
+                )
+                val targetMonth = safeDateKey.take(7)
+                if (targetMonth.length == 7 && targetMonth != _selectedExpenseMonth.value) {
+                    _selectedExpenseMonth.value = targetMonth
+                }
+                _toastEvent.emit("✏️ खर्च अपडेट हो गया ✓")
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                _toastEvent.emit("⚠️ खर्च अपडेट नहीं हो सका")
+            }
+        }
+    }
+
+    fun deleteExpense(id: String) {
+        if (id.isBlank()) return
+        viewModelScope.launch {
+            try {
+                repository.deleteExpense(id)
+                _toastEvent.emit("🗑️ खर्च हटाया गया")
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                _toastEvent.emit("⚠️ खर्च हटाया नहीं जा सका")
+            }
+        }
     }
 
     fun addAdvance(amount: Double, reason: String, dateKey: String = todayKey) {
@@ -957,9 +1094,70 @@ class HajiriViewModel(
         )
     }
 
+    fun buildExpenseReportData(monthKey: String): ExpenseReportPdfData {
+        val profile = currentUser.value
+        val stats = calculateMonthlyStats(
+            monthKey = monthKey,
+            att = attendance.value,
+            ot = overtimeRecords.value,
+            adv = advances.value,
+            sett = settings.value
+        )
+        val summary = calculateExpenseSummary(
+            monthKey = monthKey,
+            allExpenses = expenses.value,
+            monthStats = stats
+        )
+        return ExpenseReportPdfData(
+            userName = profile?.name?.ifBlank { "हाजिरी यूजर" } ?: "हाजिरी यूजर",
+            userPhone = profile?.phone ?: "",
+            userEmail = profile?.email ?: "",
+            summary = summary
+        )
+    }
+
     companion object {
         private const val TAG = "HajiriVM"
         private const val STOP_TIMEOUT_MILLIS = 5000L
+
+        fun calculateExpenseSummary(
+            monthKey: String,
+            allExpenses: List<ExpenseRecord>,
+            monthStats: MonthlyStats
+        ): ExpenseMonthSummary {
+            val monthEntries = allExpenses
+                .filter { it.dateKey.startsWith(monthKey) }
+                .sortedWith(
+                    compareByDescending<ExpenseRecord> { it.dateKey }
+                        .thenByDescending { it.createdAt?.seconds ?: 0L }
+                )
+            val totalExpense = monthEntries.sumOf { maxOf(0.0, it.amount) }
+            val monthlyIncome = maxOf(0.0, monthStats.baseEarnings + monthStats.otEarnings)
+            val netSavings = monthlyIncome - totalExpense
+
+            val grouped = monthEntries.groupBy { ExpenseCategory.fromId(it.category) }
+            val breakdowns = ExpenseCategory.entries.map { cat ->
+                val list = grouped[cat].orEmpty()
+                val catTotal = list.sumOf { maxOf(0.0, it.amount) }
+                val pct = if (totalExpense > 0.0) (catTotal / totalExpense).toFloat().coerceIn(0f, 1f) else 0f
+                CategoryExpenseBreakdown(
+                    category = cat,
+                    totalAmount = catTotal,
+                    count = list.size,
+                    percentage = pct
+                )
+            }.sortedByDescending { it.totalAmount }
+
+            return ExpenseMonthSummary(
+                monthKey = monthKey,
+                monthTitle = DateUtils.formatHindiMonthYear(monthKey),
+                totalExpense = totalExpense,
+                monthlyIncome = monthlyIncome,
+                netSavings = netSavings,
+                entries = monthEntries,
+                categoryBreakdowns = breakdowns
+            )
+        }
 
         private fun effectiveWorkDaysFor(monthKey: String, siteId: String, sett: UserSettings): Int {
             val daysInMonth = runCatching { YearMonth.parse(monthKey).lengthOfMonth() }.getOrDefault(30)

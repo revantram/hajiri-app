@@ -197,6 +197,45 @@
         }
       },
       "required": ["amount", "reason", "dateKey", "createdAt", "updatedAt"]
+    },
+    "ExpenseRecord": {
+      "title": "ExpenseRecord",
+      "description": "User daily expense entry categorized by food, transport, tools, grocery, or recharge",
+      "type": "object",
+      "properties": {
+        "amount": {
+          "type": "number",
+          "description": "Expense amount in INR"
+        },
+        "category": {
+          "type": "string",
+          "enum": ["food", "transport", "tools", "grocery", "recharge"],
+          "description": "Expense category identifier"
+        },
+        "note": {
+          "type": "string",
+          "description": "Optional note or item name"
+        },
+        "dateKey": {
+          "type": "string",
+          "description": "Expense date in YYYY-MM-DD format"
+        },
+        "siteId": {
+          "type": "string",
+          "description": "Optional work site / contractor ID"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Creation server timestamp (FieldValue.serverTimestamp())"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Last update server timestamp (FieldValue.serverTimestamp())"
+        }
+      },
+      "required": ["amount", "category", "note", "dateKey", "createdAt", "updatedAt"]
     }
   },
   "firestore": {
@@ -219,6 +258,10 @@
     "/users/{userId}/advances/{advanceId}": {
       "schema": { "$ref": "#/entities/AdvanceRecord" },
       "description": "User advance/loan entries"
+    },
+    "/users/{userId}/expenses/{expenseId}": {
+      "schema": { "$ref": "#/entities/ExpenseRecord" },
+      "description": "User personal/work expense entries synced across devices"
     }
   }
 }

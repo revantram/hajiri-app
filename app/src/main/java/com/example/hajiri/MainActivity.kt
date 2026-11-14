@@ -71,6 +71,7 @@ import com.example.hajiri.ui.components.WorkDaysDialog
 import com.example.hajiri.ui.components.WorkSitesDialog
 import com.example.hajiri.ui.screens.AuthScreen
 import com.example.hajiri.ui.screens.CalendarScreen
+import com.example.hajiri.ui.screens.ExpenseScreen
 import com.example.hajiri.ui.screens.HistoryScreen
 import com.example.hajiri.ui.screens.HomeScreen
 import com.example.hajiri.ui.screens.ReportsScreen
@@ -85,6 +86,8 @@ import com.example.hajiri.widget.HajiriWidgetManager
 import com.google.firebase.Firebase
 import com.google.firebase.auth.auth
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.PersistentCacheSettings
+import com.google.firebase.firestore.firestoreSettings
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -123,7 +126,13 @@ fun AppContent() {
                             "APPLICATION_KEY missing from CreationExtras"
                         }
                         val databaseId = app.getString(R.string.firestore_database_id)
-                        val db = FirebaseFirestore.getInstance(databaseId)
+                        val db = FirebaseFirestore.getInstance(databaseId).apply {
+                            runCatching {
+                                firestoreSettings = firestoreSettings {
+                                    setLocalCacheSettings(PersistentCacheSettings.newBuilder().build())
+                                }
+                            }
+                        }
                         val connectivityObserver = NetworkConnectivityObserver(app)
                         HajiriViewModel(
                             repository = HajiriRepository(db, auth),
@@ -165,6 +174,7 @@ fun MainApp(
 ) {
     val palette = LocalHajiriPalette.current
     val currentTab by viewModel.currentTab.collectAsState()
+    val showHistoryScreen by viewModel.showHistoryScreen.collectAsState()
     val settings by viewModel.settings.collectAsState()
     val attendance by viewModel.attendance.collectAsState()
     val otHours by viewModel.otHours.collectAsState()
@@ -235,9 +245,13 @@ fun MainApp(
         }
     }
 
-    // Android back navigation: if not on Home screen, Back returns to Home
-    BackHandler(enabled = currentTab != HajiriTab.HOME) {
-        viewModel.setTab(HajiriTab.HOME)
+    // Android back navigation: close History overlay first, or return to Home tab
+    BackHandler(enabled = showHistoryScreen || currentTab != HajiriTab.HOME) {
+        if (showHistoryScreen) {
+            viewModel.closeHistoryScreen()
+        } else {
+            viewModel.setTab(HajiriTab.HOME)
+        }
     }
 
     // Ethereal Liquid Iridescent Ambient Background
@@ -277,16 +291,20 @@ fun MainApp(
                     .fillMaxSize()
                     .padding(innerPadding)
             ) {
-                when (currentTab) {
-                    HajiriTab.HOME -> HomeScreen(viewModel = viewModel)
-                    HajiriTab.CALENDAR -> CalendarScreen(viewModel = viewModel)
-                    HajiriTab.REPORTS -> ReportsScreen(viewModel = viewModel)
-                    HajiriTab.HISTORY -> HistoryScreen(viewModel = viewModel)
-                    HajiriTab.SETTINGS -> SettingsScreen(
-                        viewModel = viewModel,
-                        googleEmail = googleEmail,
-                        onSignOut = onSignOut
-                    )
+                if (showHistoryScreen) {
+                    HistoryScreen(viewModel = viewModel)
+                } else {
+                    when (currentTab) {
+                        HajiriTab.HOME -> HomeScreen(viewModel = viewModel)
+                        HajiriTab.CALENDAR -> CalendarScreen(viewModel = viewModel)
+                        HajiriTab.REPORTS -> ReportsScreen(viewModel = viewModel)
+                        HajiriTab.EXPENSE -> ExpenseScreen(viewModel = viewModel)
+                        HajiriTab.SETTINGS -> SettingsScreen(
+                            viewModel = viewModel,
+                            googleEmail = googleEmail,
+                            onSignOut = onSignOut
+                        )
+                    }
                 }
             }
         }

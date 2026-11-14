@@ -109,6 +109,22 @@ service cloud.firestore {
              data.updatedAt <= request.time;
     }
 
+    function isValidExpenseRecord(data) {
+      return (data.amount is int || data.amount is float) &&
+             data.amount > 0 &&
+             data.amount <= 10000000 &&
+             data.category is string &&
+             data.category in ['food', 'transport', 'tools', 'grocery', 'recharge'] &&
+             data.note is string &&
+             data.note.size() <= 200 &&
+             isValidDateKey(data.dateKey) &&
+             (!('siteId' in data) || (data.siteId is string && data.siteId.size() <= 64)) &&
+             data.createdAt is timestamp &&
+             data.createdAt <= request.time &&
+             data.updatedAt is timestamp &&
+             data.updatedAt <= request.time;
+    }
+
     // User Profile Document
     match /users/{userId} {
       allow get: if isOwner(userId) && isValidId(userId);
@@ -220,6 +236,28 @@ service cloud.firestore {
                          incoming().diff(existing()).affectedKeys().hasOnly(['amount', 'reason', 'dateKey', 'siteId', 'updatedAt']);
 
         allow delete: if isOwner(userId) && isValidId(advanceId);
+      }
+
+      // Expenses Subcollection
+      match /expenses/{expenseId} {
+        allow get: if isOwner(userId) && isValidId(expenseId);
+        allow list: if isOwner(userId);
+
+        allow create: if isSignedIn() &&
+                         isValidId(expenseId) &&
+                         isValidExpenseRecord(incoming()) &&
+                         request.auth.uid == userId &&
+                         incoming().keys().hasAll(['amount', 'category', 'note', 'dateKey', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['amount', 'category', 'note', 'dateKey', 'siteId', 'createdAt', 'updatedAt']);
+
+        allow update: if isSignedIn() &&
+                         isValidId(expenseId) &&
+                         isValidExpenseRecord(incoming()) &&
+                         request.auth.uid == userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['amount', 'category', 'note', 'dateKey', 'siteId', 'updatedAt']);
+
+        allow delete: if isOwner(userId) && isValidId(expenseId);
       }
     }
   }

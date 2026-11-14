@@ -7,6 +7,8 @@ import com.example.hajiri.model.AppThemeStyle
 import com.example.hajiri.model.AttendanceFirestoreDto
 import com.example.hajiri.model.AttendanceRecord
 import com.example.hajiri.model.AttendanceStatus
+import com.example.hajiri.model.ExpenseCategory
+import com.example.hajiri.model.ExpenseRecord
 import com.example.hajiri.model.OvertimeRecord
 import com.example.hajiri.model.UserProfile
 import com.example.hajiri.model.UserSettings
@@ -125,6 +127,24 @@ class HajiriRepository(
             }
     }
 
+    fun observeExpenses(userId: String): Flow<List<ExpenseRecord>> {
+        val colRef = userDoc(userId).collection("expenses")
+        return colRef.snapshots()
+            .map { snapshot ->
+                snapshot.toObjects(
+                    ExpenseRecord::class.java,
+                    DocumentSnapshot.ServerTimestampBehavior.ESTIMATE
+                ).sortedWith(
+                    compareByDescending<ExpenseRecord> { it.dateKey }
+                        .thenByDescending { it.createdAt ?: Timestamp(0, 0) }
+                )
+            }
+            .catch { error ->
+                logFlowFirestoreErrorIfSignedIn(error, userId, OperationType.LIST, colRef.path)
+                throw error
+            }
+    }
+
     fun observeSettings(userId: String): Flow<UserSettings> {
         val docRef = userDoc(userId).collection("settings").document(SETTINGS_DOC_ID)
         return docRef.snapshots()
@@ -163,8 +183,22 @@ class HajiriRepository(
                 logFlowFirestoreErrorIfSignedIn(error, userId, OperationType.LIST, "users/$userId/advances")
                 emit(false)
             }
-        return combine(attFlow, settFlow, advFlow) { attPending, settPending, advPending ->
-            attPending || settPending || advPending
+        val otFlow = userDoc(userId).collection("overtime")
+            .snapshots(MetadataChanges.INCLUDE)
+            .map { it.metadata.hasPendingWrites() }
+            .catch { error ->
+                logFlowFirestoreErrorIfSignedIn(error, userId, OperationType.LIST, "users/$userId/overtime")
+                emit(false)
+            }
+        val expFlow = userDoc(userId).collection("expenses")
+            .snapshots(MetadataChanges.INCLUDE)
+            .map { it.metadata.hasPendingWrites() }
+            .catch { error ->
+                logFlowFirestoreErrorIfSignedIn(error, userId, OperationType.LIST, "users/$userId/expenses")
+                emit(false)
+            }
+        return combine(attFlow, settFlow, advFlow, otFlow, expFlow) { attPending, settPending, advPending, otPending, expPending ->
+            attPending || settPending || advPending || otPending || expPending
         }
     }
 
@@ -488,6 +522,78 @@ class HajiriRepository(
         }
     }
 
+    suspend fun addExpense(
+        amount: Double,
+        category: ExpenseCategory,
+        note: String,
+        dateKey: String,
+        siteId: String? = null
+    ): String {
+        val uid = requireUserId()
+        val docRef = userDoc(uid).collection("expenses").document()
+        val cleanSiteId = siteId?.trim()?.take(64).orEmpty()
+        try {
+            val payload = mutableMapOf<String, Any>(
+                "amount" to amount.coerceIn(0.01, 10000000.0),
+                "category" to category.id,
+                "note" to note.trim().take(200),
+                "dateKey" to dateKey,
+                "createdAt" to FieldValue.serverTimestamp(),
+                "updatedAt" to FieldValue.serverTimestamp()
+            )
+            if (cleanSiteId.isNotBlank()) payload["siteId"] = cleanSiteId
+            docRef.set(payload).await()
+            return docRef.id
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.CREATE, docRef.path)
+            throw e
+        }
+    }
+
+    suspend fun updateExpense(
+        id: String,
+        amount: Double,
+        category: ExpenseCategory,
+        note: String,
+        dateKey: String,
+        siteId: String? = null
+    ) {
+        val uid = requireUserId()
+        val docRef = userDoc(uid).collection("expenses").document(id)
+        val cleanSiteId = siteId?.trim()?.take(64).orEmpty()
+        try {
+            val updates = mutableMapOf<String, Any>(
+                "amount" to amount.coerceIn(0.01, 10000000.0),
+                "category" to category.id,
+                "note" to note.trim().take(200),
+                "dateKey" to dateKey,
+                "updatedAt" to FieldValue.serverTimestamp()
+            )
+            if (cleanSiteId.isNotBlank()) updates["siteId"] = cleanSiteId
+            docRef.update(updates).await()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.UPDATE, docRef.path)
+            throw e
+        }
+    }
+
+    suspend fun deleteExpense(id: String) {
+        val uid = requireUserId()
+        val docRef = userDoc(uid).collection("expenses").document(id)
+        try {
+            docRef.delete().await()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.DELETE, docRef.path)
+            throw e
+        }
+    }
+
     suspend fun saveSettings(
         salary: Double,
         dailyWage: Double,
@@ -743,8 +849,10 @@ class HajiriRepository(
                 .documents.filter { it.id.startsWith(monthKey) }
             val advDocs = userRef.collection("advances").get().await()
                 .documents.filter { (it.getString("dateKey") ?: "").startsWith(monthKey) }
+            val expDocs = userRef.collection("expenses").get().await()
+                .documents.filter { (it.getString("dateKey") ?: "").startsWith(monthKey) }
 
-            deleteRefsInBatches((attDocs + otDocs + advDocs).map { it.reference })
+            deleteRefsInBatches((attDocs + otDocs + advDocs + expDocs).map { it.reference })
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -760,7 +868,8 @@ class HajiriRepository(
             val attDocs = userRef.collection("attendance").get().await().documents
             val otDocs = userRef.collection("overtime").get().await().documents
             val advDocs = userRef.collection("advances").get().await().documents
-            deleteRefsInBatches((attDocs + otDocs + advDocs).map { it.reference })
+            val expDocs = userRef.collection("expenses").get().await().documents
+            deleteRefsInBatches((attDocs + otDocs + advDocs + expDocs).map { it.reference })
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {

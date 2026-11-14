@@ -141,3 +141,52 @@ data class MonthlyStats(
     val attendancePercentage: Int = 0,
     val workedDays: Float = 0f
 )
+
+enum class ExpenseCategory(
+    val id: String,
+    val labelHindi: String,
+    val emoji: String,
+    val colorHex: Long
+) {
+    FOOD("food", "खाना / चाय", "🍔", 0xFFF59E0B),
+    TRANSPORT("transport", "पेट्रोल / किराया", "⛽", 0xFF0EA5E9),
+    TOOLS("tools", "सामान / औजार", "🛠️", 0xFF8B5CF6),
+    GROCERY("grocery", "राशन / कमरा", "🏠", 0xFF10B981),
+    RECHARGE("recharge", "रिचार्ज / अन्य", "📱", 0xFFEC4899);
+
+    companion object {
+        fun fromId(id: String?): ExpenseCategory {
+            return entries.firstOrNull { it.id.equals(id, ignoreCase = true) } ?: RECHARGE
+        }
+    }
+}
+
+@IgnoreExtraProperties
+data class ExpenseRecord(
+    @DocumentId val id: String = "",
+    val amount: Double = 0.0,
+    val category: String = ExpenseCategory.RECHARGE.id,
+    val note: String = "",
+    val dateKey: String = "",
+    val siteId: String = "",
+    @ServerTimestamp val createdAt: Timestamp? = null,
+    @ServerTimestamp val updatedAt: Timestamp? = null
+)
+
+data class CategoryExpenseBreakdown(
+    val category: ExpenseCategory,
+    val totalAmount: Double,
+    val count: Int,
+    val percentage: Float
+)
+
+data class ExpenseMonthSummary(
+    val monthKey: String,
+    val monthTitle: String,
+    val totalExpense: Double = 0.0,
+    val monthlyIncome: Double = 0.0,
+    val netSavings: Double = 0.0,
+    val entries: List<ExpenseRecord> = emptyList(),
+    val categoryBreakdowns: List<CategoryExpenseBreakdown> = emptyList()
+)
+

@@ -137,4 +137,61 @@ class HajiriViewModelCalculationTest {
         assertEquals(18000.0, customStats.baseEarnings, 0.01)
         assertEquals(60, customStats.attendancePercentage)
     }
+
+    @Test
+    fun calculateExpenseSummary_aggregatesCategoriesSortsLatestFirstAndComputesSavings() {
+        val monthStats = com.example.hajiri.model.MonthlyStats(
+            yearMonth = "2026-11",
+            baseEarnings = 15000.0,
+            otEarnings = 1200.0
+        )
+        val expenses = listOf(
+            com.example.hajiri.model.ExpenseRecord(
+                id = "e1",
+                amount = 150.0,
+                category = com.example.hajiri.model.ExpenseCategory.FOOD.id,
+                note = "चाय व खाना",
+                dateKey = "2026-11-05"
+            ),
+            com.example.hajiri.model.ExpenseRecord(
+                id = "e2",
+                amount = 650.0,
+                category = com.example.hajiri.model.ExpenseCategory.TRANSPORT.id,
+                note = "पेट्रोल",
+                dateKey = "2026-11-14"
+            ),
+            com.example.hajiri.model.ExpenseRecord(
+                id = "e3",
+                amount = 200.0,
+                category = com.example.hajiri.model.ExpenseCategory.FOOD.id,
+                note = "दोपहर का खाना",
+                dateKey = "2026-11-10"
+            ),
+            com.example.hajiri.model.ExpenseRecord(
+                id = "e_old",
+                amount = 999.0,
+                category = com.example.hajiri.model.ExpenseCategory.TOOLS.id,
+                note = "अक्टूबर खर्च",
+                dateKey = "2026-10-20"
+            )
+        )
+
+        val summary = HajiriViewModel.calculateExpenseSummary(
+            monthKey = "2026-11",
+            allExpenses = expenses,
+            monthStats = monthStats
+        )
+
+        assertEquals(1000.0, summary.totalExpense, 0.01)
+        assertEquals(16200.0, summary.monthlyIncome, 0.01)
+        assertEquals(15200.0, summary.netSavings, 0.01)
+        assertEquals(listOf("e2", "e3", "e1"), summary.entries.map { it.id })
+
+        val transport = summary.categoryBreakdowns.first { it.category == com.example.hajiri.model.ExpenseCategory.TRANSPORT }
+        val food = summary.categoryBreakdowns.first { it.category == com.example.hajiri.model.ExpenseCategory.FOOD }
+        assertEquals(650.0, transport.totalAmount, 0.01)
+        assertEquals(0.65f, transport.percentage, 0.001f)
+        assertEquals(350.0, food.totalAmount, 0.01)
+        assertEquals(2, food.count)
+    }
 }
