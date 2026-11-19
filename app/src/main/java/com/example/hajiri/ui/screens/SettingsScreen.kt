@@ -26,8 +26,13 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -42,6 +47,7 @@ import com.example.hajiri.model.WageMode
 import com.example.hajiri.ui.components.GlassCard
 import com.example.hajiri.ui.theme.AdvancePinkBg
 import com.example.hajiri.ui.theme.LocalHajiriPalette
+import com.example.hajiri.ui.theme.OtOrange
 import com.example.hajiri.ui.theme.OtOrangeBg
 import com.example.hajiri.ui.theme.StatusGreen
 import com.example.hajiri.ui.theme.StatusGreenBg
@@ -49,13 +55,15 @@ import com.example.hajiri.ui.theme.StatusRed
 import com.example.hajiri.ui.theme.StatusRedBg
 import android.Manifest
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.example.hajiri.util.AppUpdateChecker
+import com.example.hajiri.util.DailyReminderScheduler
 import com.example.hajiri.util.DateUtils
 import com.example.hajiri.util.UpdateCheckState
 import com.example.hajiri.viewmodel.HajiriViewModel
@@ -70,6 +78,7 @@ fun SettingsScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     val palette = LocalHajiriPalette.current
     val settings by viewModel.settings.collectAsState()
     val currentUser by viewModel.currentUser.collectAsState()
@@ -86,13 +95,69 @@ fun SettingsScreen(
     val activeWageMode = WageMode.fromId(activeSite.wageMode)
     val activeTheme = AppThemeStyle.fromId(settings.themeStyle)
 
+    var notificationsAllowed by remember {
+        mutableStateOf(DailyReminderScheduler.areNotificationsEnabled(context))
+    }
+    var exactAlarmAllowed by remember {
+        mutableStateOf(DailyReminderScheduler.canScheduleExactAlarms(context))
+    }
+    var notificationPermissionDeniedRecently by remember { mutableStateOf(false) }
+    var pendingHourToEnable by remember { mutableIntStateOf(reminderHour) }
+
+    DisposableEffect(lifecycleOwner, context) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                val nowNotifAllowed = DailyReminderScheduler.areNotificationsEnabled(context)
+                val nowExactAllowed = DailyReminderScheduler.canScheduleExactAlarms(context)
+                notificationsAllowed = nowNotifAllowed
+                exactAlarmAllowed = nowExactAllowed
+                if (nowNotifAllowed && notificationPermissionDeniedRecently && !viewModel.reminderEnabled.value) {
+                    notificationPermissionDeniedRecently = false
+                    viewModel.setDailyReminder(context, enabled = true, hourOfDay = pendingHourToEnable)
+                } else {
+                    if (nowNotifAllowed) {
+                        notificationPermissionDeniedRecently = false
+                    }
+                    viewModel.refreshReminderSchedule(context)
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { granted ->
+        notificationsAllowed = granted && DailyReminderScheduler.areNotificationsEnabled(context)
+        exactAlarmAllowed = DailyReminderScheduler.canScheduleExactAlarms(context)
         if (granted) {
-            viewModel.setDailyReminder(context, enabled = true, hourOfDay = reminderHour)
+            notificationPermissionDeniedRecently = false
+            viewModel.setDailyReminder(context, enabled = true, hourOfDay = pendingHourToEnable)
         } else {
+            notificationPermissionDeniedRecently = true
             viewModel.showMessage("⚠️ रिमाइंडर के लिए नोटिफिकेशन अनुमति जरूरी है")
+        }
+    }
+
+    fun requestEnableReminder(targetHour: Int) {
+        pendingHourToEnable = targetHour
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            !DailyReminderScheduler.hasNotificationPermission(context)
+        ) {
+            viewModel.saveReminderPreferredHour(context, targetHour)
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else if (!DailyReminderScheduler.areNotificationsEnabled(context)) {
+            viewModel.saveReminderPreferredHour(context, targetHour)
+            notificationPermissionDeniedRecently = true
+            notificationsAllowed = false
+            viewModel.showMessage("⚠️ फोन की सेटिंग्स में नोटिफिकेशन चालू करें")
+        } else {
+            notificationsAllowed = true
+            exactAlarmAllowed = DailyReminderScheduler.canScheduleExactAlarms(context)
+            viewModel.setDailyReminder(context, enabled = true, hourOfDay = targetHour)
         }
     }
 
@@ -412,13 +477,10 @@ fun SettingsScreen(
                         checked = reminderEnabled,
                         onCheckedChange = { wantEnable ->
                             if (!wantEnable) {
+                                notificationPermissionDeniedRecently = false
                                 viewModel.setDailyReminder(context, enabled = false)
-                            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-                                ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-                            ) {
-                                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                             } else {
-                                viewModel.setDailyReminder(context, enabled = true, hourOfDay = reminderHour)
+                                requestEnableReminder(reminderHour)
                             }
                         },
                         modifier = Modifier.testTag("daily_reminder_switch")
@@ -440,15 +502,7 @@ fun SettingsScreen(
                             modifier = Modifier
                                 .weight(1f)
                                 .clickable {
-                                    if (reminderEnabled) {
-                                        viewModel.setDailyReminder(context, enabled = true, hourOfDay = hour)
-                                    } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-                                        ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-                                    ) {
-                                        viewModel.setDailyReminder(context, enabled = false, hourOfDay = hour)
-                                    } else {
-                                        viewModel.setDailyReminder(context, enabled = true, hourOfDay = hour)
-                                    }
+                                    requestEnableReminder(hour)
                                 }
                                 .testTag("reminder_hour_${hour}_btn")
                         ) {
@@ -462,6 +516,118 @@ fun SettingsScreen(
                             )
                         }
                     }
+                }
+
+                // Subtle permission & schedule status indicator
+                if ((reminderEnabled || notificationPermissionDeniedRecently) && !notificationsAllowed) {
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = StatusRedBg,
+                        border = BorderStroke(1.dp, StatusRed.copy(alpha = 0.28f)),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("reminder_notification_permission_banner")
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 10.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = "⚠️ नोटिफिकेशन अनुमति बंद है — रिमाइंडर के लिए चालू करें",
+                                fontSize = 11.sp,
+                                color = StatusRed,
+                                fontWeight = FontWeight.Medium,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .padding(end = 8.dp)
+                            )
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = StatusRed,
+                                modifier = Modifier
+                                    .clickable {
+                                        try {
+                                            context.startActivity(
+                                                DailyReminderScheduler.buildNotificationSettingsIntent(context)
+                                            )
+                                        } catch (_: Exception) {
+                                            viewModel.showMessage("⚠️ नोटिफिकेशन सेटिंग्स खुल नहीं सकीं")
+                                        }
+                                    }
+                                    .testTag("reminder_open_notification_settings_btn")
+                            ) {
+                                Text(
+                                    text = "अनुमति दें",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White,
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)
+                                )
+                            }
+                        }
+                    }
+                } else if (reminderEnabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !exactAlarmAllowed) {
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = OtOrangeBg,
+                        border = BorderStroke(1.dp, OtOrange.copy(alpha = 0.30f)),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("reminder_exact_alarm_banner")
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 10.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = "⏰ सटीक समय के लिए अलार्म अनुमति दें (अभी सामान्य रिमाइंडर सक्रिय है)",
+                                fontSize = 11.sp,
+                                color = OtOrange,
+                                fontWeight = FontWeight.Medium,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .padding(end = 8.dp)
+                            )
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = OtOrange,
+                                modifier = Modifier
+                                    .clickable {
+                                        try {
+                                            context.startActivity(
+                                                DailyReminderScheduler.buildExactAlarmSettingsIntent(context)
+                                            )
+                                        } catch (_: Exception) {
+                                            viewModel.showMessage("⚠️ अलार्म सेटिंग्स खुल नहीं सकीं")
+                                        }
+                                    }
+                                    .testTag("reminder_open_exact_alarm_settings_btn")
+                            ) {
+                                Text(
+                                    text = "सेटिंग खोलें",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White,
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)
+                                )
+                            }
+                        }
+                    }
+                } else if (reminderEnabled && notificationsAllowed) {
+                    val activeTimeLabel = if (reminderHour == 21) "रात 9:00 बजे" else "रात 8:00 बजे"
+                    Text(
+                        text = "✓ सक्रिय: रोज़ $activeTimeLabel (आज की हाजिरी बाकी होने पर)",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = StatusGreen,
+                        modifier = Modifier.testTag("reminder_active_status_text")
+                    )
                 }
             }
         }

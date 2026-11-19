@@ -23,6 +23,7 @@ import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FirebaseFirestoreException
 import com.google.firebase.firestore.MetadataChanges
+import com.google.firebase.firestore.Source
 import com.google.firebase.firestore.snapshots
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
@@ -48,6 +49,27 @@ class HajiriRepository(
     }
 
     private fun userDoc(uid: String) = db.collection("users").document(uid)
+
+    /**
+     * Checks whether an attendance record exists for [dateKey] (yyyy-MM-dd) for [userId].
+     * Tries default (server/cache) first and gracefully falls back to local Firestore cache when offline.
+     */
+    suspend fun hasAttendanceForDate(userId: String, dateKey: String): Boolean {
+        val docRef = userDoc(userId).collection("attendance").document(dateKey)
+        return try {
+            docRef.get().await().exists()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            try {
+                docRef.get(Source.CACHE).await().exists()
+            } catch (ce: CancellationException) {
+                throw ce
+            } catch (_: Exception) {
+                false
+            }
+        }
+    }
 
     fun observeProfile(userId: String): Flow<UserProfile?> {
         val docRef = userDoc(userId)

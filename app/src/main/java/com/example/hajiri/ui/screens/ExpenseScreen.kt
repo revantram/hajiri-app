@@ -34,7 +34,6 @@ import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SelectableDates
@@ -545,63 +544,7 @@ fun ExpenseScreen(
             }
         }
 
-        // 4. Category-Wise Breakdown ("किस-किस पर कितना खर्च हुआ")
-        item {
-            GlassCard(modifier = Modifier.testTag("expense_category_breakdown_card")) {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text(
-                        text = "किस-किस पर कितना खर्च हुआ",
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = palette.textPrimary
-                    )
-
-                    if (summary.totalExpense <= 0.0) {
-                        Text(
-                            text = "${summary.monthTitle} में अभी कोई खर्च दर्ज नहीं है।",
-                            fontSize = 12.sp,
-                            color = palette.textMuted,
-                            modifier = Modifier.padding(vertical = 8.dp)
-                        )
-                    } else {
-                        summary.categoryBreakdowns.forEach { item ->
-                            val catColor = Color(item.category.colorHex)
-                            val pctInt = (item.percentage * 100f).toInt().coerceIn(0, 100)
-                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        text = "${item.category.emoji} ${item.category.labelHindi}",
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = palette.textPrimary
-                                    )
-                                    Text(
-                                        text = "₹${DateUtils.formatInr(item.totalAmount)} ($pctInt%)",
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = if (item.totalAmount > 0.0) catColor else palette.textMuted
-                                    )
-                                }
-                                LinearProgressIndicator(
-                                    progress = { item.percentage },
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(6.dp),
-                                    color = catColor,
-                                    trackColor = palette.progressTrackBg
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // 5. Direct PDF Export & Share Button
+        // 4. Direct PDF Export & Share Button
         item {
             Button(
                 onClick = {

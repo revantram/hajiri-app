@@ -89,21 +89,39 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.PersistentCacheSettings
 import com.google.firebase.firestore.firestoreSettings
 
+import androidx.compose.runtime.mutableIntStateOf
+
 class MainActivity : ComponentActivity() {
+    private val openHomeTrigger = mutableIntStateOf(0)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        consumeReminderIntent(intent)
 
         setContent {
             HajiriTheme {
-                AppContent()
+                AppContent(openHomeTrigger = openHomeTrigger.intValue)
             }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        consumeReminderIntent(intent)
+    }
+
+    private fun consumeReminderIntent(launchIntent: Intent?) {
+        if (launchIntent?.getBooleanExtra(DailyReminderScheduler.EXTRA_OPEN_HOME_ATTENDANCE, false) == true) {
+            launchIntent.removeExtra(DailyReminderScheduler.EXTRA_OPEN_HOME_ATTENDANCE)
+            openHomeTrigger.intValue += 1
         }
     }
 }
 
 @Composable
-fun AppContent() {
+fun AppContent(openHomeTrigger: Int = 0) {
     val auth = Firebase.auth
     val currentUser by auth.authStateFlow().collectAsStateWithLifecycle(initialValue = auth.currentUser)
     val context = LocalContext.current
@@ -159,7 +177,11 @@ fun AppContent() {
                 MainApp(
                     viewModel = viewModel,
                     googleEmail = user.email ?: "",
-                    onSignOut = { signOutFromGoogle(credentialManager, scope) }
+                    openHomeTrigger = openHomeTrigger,
+                    onSignOut = {
+                        DailyReminderScheduler.clearTodayAttendanceStatus(context)
+                        signOutFromGoogle(credentialManager, scope)
+                    }
                 )
             }
         }
@@ -170,6 +192,7 @@ fun AppContent() {
 fun MainApp(
     viewModel: HajiriViewModel,
     googleEmail: String,
+    openHomeTrigger: Int = 0,
     onSignOut: () -> Unit
 ) {
     val palette = LocalHajiriPalette.current
@@ -215,6 +238,14 @@ fun MainApp(
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
+    LaunchedEffect(openHomeTrigger) {
+        if (openHomeTrigger > 0) {
+            viewModel.closeHistoryScreen()
+            viewModel.setTab(HajiriTab.HOME)
+            viewModel.refreshTodayDate()
         }
     }
 

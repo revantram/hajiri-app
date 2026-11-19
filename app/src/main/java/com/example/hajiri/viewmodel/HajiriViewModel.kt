@@ -196,8 +196,14 @@ class HajiriViewModel(
     private val _reminderEnabled = MutableStateFlow(false)
     val reminderEnabled: StateFlow<Boolean> = _reminderEnabled.asStateFlow()
 
-    private val _reminderHour = MutableStateFlow(20)
+    private val _reminderHour = MutableStateFlow(DailyReminderScheduler.DEFAULT_HOUR)
     val reminderHour: StateFlow<Int> = _reminderHour.asStateFlow()
+
+    private val _reminderMinute = MutableStateFlow(DailyReminderScheduler.DEFAULT_MINUTE)
+    val reminderMinute: StateFlow<Int> = _reminderMinute.asStateFlow()
+
+    private val _reminderScheduleMode = MutableStateFlow(DailyReminderScheduler.ScheduleMode.DISABLED)
+    val reminderScheduleMode: StateFlow<DailyReminderScheduler.ScheduleMode> = _reminderScheduleMode.asStateFlow()
 
     // Auto-update state
     private val _autoUpdateCheckEnabled = MutableStateFlow(true)
@@ -957,20 +963,68 @@ class HajiriViewModel(
 
     fun initReminderState(context: Context) {
         val appContext = context.applicationContext
-        _reminderEnabled.value = DailyReminderScheduler.isEnabled(appContext)
+        val enabled = DailyReminderScheduler.isEnabled(appContext)
+        _reminderEnabled.value = enabled
         _reminderHour.value = DailyReminderScheduler.getReminderHour(appContext)
+        _reminderMinute.value = DailyReminderScheduler.getReminderMinute(appContext)
+        _reminderScheduleMode.value = if (enabled) {
+            DailyReminderScheduler.rescheduleIfEnabled(appContext)
+        } else {
+            DailyReminderScheduler.ScheduleMode.DISABLED
+        }
     }
 
-    fun setDailyReminder(context: Context, enabled: Boolean, hourOfDay: Int = _reminderHour.value) {
+    fun saveReminderPreferredHour(context: Context, hourOfDay: Int) {
         val appContext = context.applicationContext
-        DailyReminderScheduler.setReminder(appContext, enabled, hourOfDay)
+        val safeHour = DailyReminderScheduler.normalizeHour(hourOfDay)
+        DailyReminderScheduler.savePreferredTimeOnly(appContext, safeHour)
+        _reminderHour.value = safeHour
+        _reminderMinute.value = DailyReminderScheduler.DEFAULT_MINUTE
+    }
+
+    fun refreshReminderSchedule(context: Context) {
+        val appContext = context.applicationContext
+        val enabled = DailyReminderScheduler.isEnabled(appContext)
         _reminderEnabled.value = enabled
-        _reminderHour.value = if (hourOfDay == 21) 21 else 20
-        val timeLabel = if (_reminderHour.value == 21) "रात 9:00 बजे" else "रात 8:00 बजे"
-        showMessage(
-            if (enabled) "🔔 दैनिक रिमाइंडर चालू ($timeLabel)"
-            else "🔕 दैनिक रिमाइंडर बंद किया गया"
+        _reminderHour.value = DailyReminderScheduler.getReminderHour(appContext)
+        _reminderMinute.value = DailyReminderScheduler.getReminderMinute(appContext)
+        _reminderScheduleMode.value = if (enabled) {
+            DailyReminderScheduler.rescheduleIfEnabled(appContext)
+        } else {
+            DailyReminderScheduler.ScheduleMode.DISABLED
+        }
+    }
+
+    fun setDailyReminder(
+        context: Context,
+        enabled: Boolean,
+        hourOfDay: Int = _reminderHour.value,
+        silent: Boolean = false
+    ) {
+        val appContext = context.applicationContext
+        val safeHour = DailyReminderScheduler.normalizeHour(hourOfDay)
+        val mode = DailyReminderScheduler.setReminder(
+            context = appContext,
+            enabled = enabled,
+            hourOfDay = safeHour,
+            minute = DailyReminderScheduler.DEFAULT_MINUTE
         )
+        _reminderEnabled.value = enabled
+        _reminderHour.value = safeHour
+        _reminderMinute.value = DailyReminderScheduler.DEFAULT_MINUTE
+        _reminderScheduleMode.value = mode
+
+        if (!silent) {
+            val timeLabel = if (safeHour == 21) "रात 9:00 बजे" else "रात 8:00 बजे"
+            showMessage(
+                when {
+                    !enabled -> "🔕 दैनिक रिमाइंडर बंद किया गया"
+                    mode == DailyReminderScheduler.ScheduleMode.INEXACT_FALLBACK ->
+                        "🔔 दैनिक रिमाइंडर चालू ($timeLabel) • सटीक समय के लिए अलार्म अनुमति दें"
+                    else -> "🔔 दैनिक रिमाइंडर चालू ($timeLabel)"
+                }
+            )
+        }
     }
 
     fun initUpdateState(context: Context) {
