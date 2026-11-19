@@ -1,13 +1,22 @@
 package com.example.hajiri.util
 
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
+import android.provider.Settings
+import androidx.core.content.FileProvider
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
+import java.io.File
+import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
+import java.util.Locale
 
 data class AppReleaseInfo(
     val currentVersion: String,
@@ -25,6 +34,22 @@ sealed class UpdateCheckState {
     data class UpToDate(val currentVersion: String, val latestTag: String) : UpdateCheckState()
     data class UpdateAvailable(val releaseInfo: AppReleaseInfo) : UpdateCheckState()
     data class Error(val message: String) : UpdateCheckState()
+}
+
+sealed class UpdateDownloadState {
+    data object Idle : UpdateDownloadState()
+    data class Downloading(
+        val percent: Int,
+        val downloadedBytes: Long,
+        val totalBytes: Long
+    ) : UpdateDownloadState()
+
+    data class ReadyToInstall(
+        val apkFile: File,
+        val versionTag: String
+    ) : UpdateDownloadState()
+
+    data class Error(val message: String) : UpdateDownloadState()
 }
 
 object AppUpdateChecker {
@@ -91,9 +116,9 @@ object AppUpdateChecker {
                 @Suppress("DEPRECATION")
                 pkgManager.getPackageInfo(context.packageName, 0)
             }
-            pkgInfo.versionName?.ifBlank { "1.3" } ?: "1.3"
+            pkgInfo.versionName?.ifBlank { "1.4" } ?: "1.4"
         } catch (_: Exception) {
-            "1.3"
+            "1.4"
         }
     }
 
@@ -161,6 +186,17 @@ object AppUpdateChecker {
         )
     }
 
+    fun formatBytesMb(bytes: Long): String {
+        if (bytes <= 0L) return "0 MB"
+        val mb = bytes.toDouble() / (1024.0 * 1024.0)
+        return if (mb >= 0.1) {
+            String.format(Locale.US, "%.1f MB", mb)
+        } else {
+            val kb = bytes / 1024L
+            "$kb KB"
+        }
+    }
+
     suspend fun checkForUpdate(
         context: Context,
         repoSlug: String
@@ -199,5 +235,142 @@ object AppUpdateChecker {
         } finally {
             connection?.disconnect()
         }
+    }
+
+    /**
+     * Downloads the release APK inside the app into cacheDir/updates/ while reporting
+     * real-time download progress (percentage, downloaded bytes, total bytes).
+     */
+    suspend fun downloadApkWithProgress(
+        context: Context,
+        downloadUrl: String,
+        versionTag: String,
+        onProgress: (percent: Int, downloadedBytes: Long, totalBytes: Long) -> Unit
+    ): Result<File> = withContext(Dispatchers.IO) {
+        val appContext = context.applicationContext
+        val updatesDir = File(appContext.cacheDir, "updates").apply { mkdirs() }
+        val safeTag = versionTag.replace(Regex("[^a-zA-Z0-9._-]"), "_")
+        val targetFile = File(updatesDir, "Hajiri-$safeTag.apk")
+        val tempFile = File(updatesDir, "Hajiri-$safeTag.apk.part")
+
+        var connection: HttpURLConnection? = null
+        try {
+            // Follow up to 5 HTTP redirects (GitHub releases redirect to objects.githubusercontent.com)
+            var currentUrl = downloadUrl
+            var redirects = 0
+            while (redirects < 5) {
+                connection?.disconnect()
+                val conn = (URL(currentUrl).openConnection() as HttpURLConnection).apply {
+                    requestMethod = "GET"
+                    instanceFollowRedirects = true
+                    connectTimeout = 15_000
+                    readTimeout = 30_000
+                    setRequestProperty("User-Agent", "Hajiri-Android-App")
+                }
+                val code = conn.responseCode
+                if (code in 300..399) {
+                    val location = conn.getHeaderField("Location")
+                    conn.disconnect()
+                    if (location.isNullOrBlank()) error("Redirect location missing")
+                    currentUrl = location
+                    redirects++
+                } else {
+                    connection = conn
+                    break
+                }
+            }
+
+            val activeConn = connection ?: error("कनेक्शन स्थापित नहीं हो सका")
+            val code = activeConn.responseCode
+            if (code !in 200..299) {
+                error("डाउनलोड विफल रहा (HTTP $code)")
+            }
+
+            val totalBytes = activeConn.contentLengthLong
+            var downloadedBytes = 0L
+            var lastReportedPct = -1
+            var lastReportedTime = 0L
+
+            onProgress(0, 0L, totalBytes)
+
+            activeConn.inputStream.use { input ->
+                FileOutputStream(tempFile).use { output ->
+                    val buffer = ByteArray(16 * 1024)
+                    while (true) {
+                        currentCoroutineContext().ensureActive()
+                        val read = input.read(buffer)
+                        if (read == -1) break
+                        output.write(buffer, 0, read)
+                        downloadedBytes += read
+
+                        val pct = if (totalBytes > 0L) {
+                            ((downloadedBytes * 100L) / totalBytes).toInt().coerceIn(0, 100)
+                        } else {
+                            -1
+                        }
+                        val now = System.currentTimeMillis()
+                        if (pct != lastReportedPct || (now - lastReportedTime) >= 120L) {
+                            lastReportedPct = pct
+                            lastReportedTime = now
+                            onProgress(pct.coerceAtLeast(0), downloadedBytes, totalBytes)
+                        }
+                    }
+                    output.flush()
+                }
+            }
+
+            if (downloadedBytes <= 0L) {
+                tempFile.delete()
+                error("डाउनलोड की गई फ़ाइल खाली है")
+            }
+
+            if (targetFile.exists()) targetFile.delete()
+            if (!tempFile.renameTo(targetFile)) {
+                tempFile.copyTo(targetFile, overwrite = true)
+                tempFile.delete()
+            }
+
+            onProgress(100, downloadedBytes, if (totalBytes > 0L) totalBytes else downloadedBytes)
+            Result.success(targetFile)
+        } catch (e: Exception) {
+            runCatching { tempFile.delete() }
+            if (e is kotlin.coroutines.cancellation.CancellationException) throw e
+            Result.failure(e)
+        } finally {
+            connection?.disconnect()
+        }
+    }
+
+    /**
+     * Launches Android's system package installer for a downloaded APK using FileProvider.
+     * Returns true if installer opened, or false if the user was directed to allow Unknown App Sources.
+     */
+    fun launchApkInstaller(context: Context, apkFile: File): Boolean {
+        val appContext = context.applicationContext
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
+            !appContext.packageManager.canRequestPackageInstalls()
+        ) {
+            val settingsIntent = Intent(
+                Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                Uri.parse("package:${appContext.packageName}")
+            ).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            appContext.startActivity(settingsIntent)
+            return false
+        }
+
+        val apkUri = FileProvider.getUriForFile(
+            appContext,
+            "${appContext.packageName}.fileprovider",
+            apkFile
+        )
+        val installIntent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(apkUri, "application/vnd.android.package-archive")
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        appContext.startActivity(installIntent)
+        return true
     }
 }

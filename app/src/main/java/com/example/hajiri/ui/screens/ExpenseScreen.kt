@@ -5,13 +5,10 @@ import android.content.Intent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -21,12 +18,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DatePicker
@@ -34,7 +28,6 @@ import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SelectableDates
 import androidx.compose.material3.Surface
@@ -64,6 +57,8 @@ import com.example.hajiri.model.ExpenseCategory
 import com.example.hajiri.model.ExpenseRecord
 import com.example.hajiri.ui.components.ConfirmActionDialog
 import com.example.hajiri.ui.components.GlassCard
+import com.example.hajiri.ui.components.LiquidGlassButton
+import com.example.hajiri.ui.components.LiquidGlassOutlinedButton
 import com.example.hajiri.ui.components.MonthYearPickerDialog
 import com.example.hajiri.ui.components.outlinedFieldColors
 import com.example.hajiri.ui.theme.AdvancePink
@@ -85,7 +80,7 @@ import java.time.LocalDate
 import java.time.YearMonth
 import java.time.ZoneOffset
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ExpenseScreen(
     viewModel: HajiriViewModel,
@@ -105,7 +100,6 @@ fun ExpenseScreen(
     var showMonthPicker by remember { mutableStateOf(false) }
     var isAddExpanded by remember { mutableStateOf(true) }
     var amountInput by remember { mutableStateOf("") }
-    var selectedCategory by remember { mutableStateOf(ExpenseCategory.FOOD) }
     var noteInput by remember { mutableStateOf("") }
     var selectedDate by remember(todayKey) {
         mutableStateOf(DateUtils.parseDateKey(todayKey) ?: LocalDate.now())
@@ -165,8 +159,7 @@ fun ExpenseScreen(
     }
 
     deletingExpense?.let { target ->
-        val cat = ExpenseCategory.fromId(target.category)
-        val label = target.note.ifBlank { cat.labelHindi }
+        val label = target.note.ifBlank { "खर्च" }
         ConfirmActionDialog(
             title = "🗑️ खर्च मिटाएं?",
             message = "क्या आप ₹${DateUtils.formatInr(target.amount)} ($label) का रिकॉर्ड हटाना चाहते हैं?",
@@ -416,44 +409,6 @@ fun ExpenseScreen(
                                     .testTag("expense_amount_input")
                             )
 
-                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                Text(
-                                    text = "श्रेणी चुनें",
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = palette.textSecondary
-                                )
-                                FlowRow(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    ExpenseCategory.entries.forEach { cat ->
-                                        val isSelected = cat == selectedCategory
-                                        val catColor = Color(cat.colorHex)
-                                        Surface(
-                                            shape = RoundedCornerShape(50),
-                                            color = if (isSelected) catColor.copy(alpha = 0.18f) else palette.segmentedTrackBg,
-                                            border = BorderStroke(
-                                                width = if (isSelected) 1.5.dp else 1.dp,
-                                                color = if (isSelected) catColor else palette.glassBorderMid
-                                            ),
-                                            modifier = Modifier
-                                                .clickable { selectedCategory = cat }
-                                                .testTag("expense_cat_chip_${cat.id}")
-                                        ) {
-                                            Text(
-                                                text = "${cat.emoji} ${cat.labelHindi}",
-                                                fontSize = 12.sp,
-                                                fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.SemiBold,
-                                                color = if (isSelected) catColor else palette.textSecondary,
-                                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp)
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-
                             OutlinedTextField(
                                 value = noteInput,
                                 onValueChange = { noteInput = it },
@@ -508,7 +463,7 @@ fun ExpenseScreen(
                                 }
                             }
 
-                            Button(
+                            LiquidGlassButton(
                                 onClick = {
                                     val amt = amountInput.toDoubleOrNull() ?: 0.0
                                     if (amt <= 0.0) {
@@ -516,7 +471,7 @@ fun ExpenseScreen(
                                     } else {
                                         viewModel.addExpense(
                                             amount = amt,
-                                            category = selectedCategory,
+                                            category = ExpenseCategory.RECHARGE,
                                             note = noteInput,
                                             dateKey = DateUtils.toDateKey(selectedDate)
                                         )
@@ -524,11 +479,12 @@ fun ExpenseScreen(
                                         noteInput = ""
                                     }
                                 },
-                                colors = ButtonDefaults.buttonColors(containerColor = palette.accent),
-                                shape = RoundedCornerShape(14.dp),
+                                containerColor = palette.accent,
+                                secondaryColor = palette.accentSecondary,
+                                shape = RoundedCornerShape(16.dp),
+                                minHeight = 50.dp,
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(50.dp)
                                     .testTag("save_expense_btn")
                             ) {
                                 Text(
@@ -546,7 +502,7 @@ fun ExpenseScreen(
 
         // 4. Direct PDF Export & Share Button
         item {
-            Button(
+            LiquidGlassButton(
                 onClick = {
                     isPdfBusy = true
                     val pdfData = viewModel.buildExpenseReportData(selectedMonth)
@@ -581,12 +537,12 @@ fun ExpenseScreen(
                     }
                 },
                 enabled = !isPdfBusy,
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF25D366)),
-                shape = RoundedCornerShape(16.dp),
+                containerColor = Color(0xFF16A34A),
+                secondaryColor = Color(0xFF15803D),
+                shape = RoundedCornerShape(18.dp),
+                minHeight = 52.dp,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(52.dp)
-                    .shadow(6.dp, RoundedCornerShape(16.dp), spotColor = Color(0x3325D366))
                     .testTag("export_expense_pdf_btn")
             ) {
                 Text(
@@ -598,7 +554,7 @@ fun ExpenseScreen(
             }
         }
 
-        // 6. Date-Wise Expense History ("खर्च का विवरण")
+        // 5. PDF-Style Clean Professional Expense Statement ("खर्च का विवरण")
         item {
             Row(
                 modifier = Modifier
@@ -609,15 +565,15 @@ fun ExpenseScreen(
             ) {
                 Text(
                     text = "खर्च का विवरण",
-                    fontSize = 15.sp,
+                    fontSize = 16.sp,
                     fontWeight = FontWeight.ExtraBold,
                     color = palette.textPrimary
                 )
                 Text(
                     text = "${summary.monthTitle} (${summary.entries.size})",
                     fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = palette.textMuted
+                    fontWeight = FontWeight.Bold,
+                    color = palette.textSecondary
                 )
             }
         }
@@ -627,8 +583,9 @@ fun ExpenseScreen(
                 GlassCard {
                     Text(
                         text = "${summary.monthTitle} में कोई खर्च नहीं मिला। ऊपर '+ खर्च जोड़ें' से नया खर्च लिखें।",
-                        color = palette.textMuted,
+                        color = palette.textSecondary,
                         fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium,
                         textAlign = TextAlign.Center,
                         modifier = Modifier
                             .fillMaxWidth()
@@ -637,11 +594,12 @@ fun ExpenseScreen(
                 }
             }
         } else {
-            items(summary.entries, key = { it.id.ifBlank { "${it.dateKey}_${it.amount}_${it.note}" } }) { expense ->
-                ExpenseHistoryRow(
-                    expense = expense,
-                    onEdit = { editingExpense = expense },
-                    onDelete = { deletingExpense = expense }
+            item {
+                ExpensePdfLedgerCard(
+                    entries = summary.entries,
+                    totalExpense = summary.totalExpense,
+                    onEdit = { editingExpense = it },
+                    onDelete = { deletingExpense = it }
                 )
             }
         }
@@ -653,91 +611,161 @@ fun ExpenseScreen(
 }
 
 @Composable
-private fun ExpenseHistoryRow(
-    expense: ExpenseRecord,
-    onEdit: () -> Unit,
-    onDelete: () -> Unit
+private fun ExpensePdfLedgerCard(
+    entries: List<ExpenseRecord>,
+    totalExpense: Double,
+    onEdit: (ExpenseRecord) -> Unit,
+    onDelete: (ExpenseRecord) -> Unit
 ) {
     val palette = LocalHajiriPalette.current
-    val category = ExpenseCategory.fromId(expense.category)
-    val catColor = Color(category.colorHex)
-    val parsedDate = DateUtils.parseDateKey(expense.dateKey)
-    val dateText = if (parsedDate != null) {
-        val dayName = DateUtils.HINDI_DAYS[parsedDate.dayOfWeek.value - 1]
-        "${DateUtils.formatHindiDate(parsedDate)} • $dayName"
-    } else {
-        expense.dateKey
-    }
+    val headerBg = if (palette.isDark) Color(0x3838BDF8) else Color(0x160F172A)
+    val altRowBg = if (palette.isDark) Color(0x14FFFFFF) else Color(0x090F172A)
 
     GlassCard(
-        modifier = Modifier.testTag("expense_item_${expense.id}")
+        contentPadding = 0.dp,
+        modifier = Modifier.testTag("expense_pdf_ledger_card")
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
+        Column(modifier = Modifier.fillMaxWidth()) {
+            // PDF-style Table Header Row
+            Row(
                 modifier = Modifier
-                    .size(44.dp)
-                    .background(catColor.copy(alpha = 0.15f), CircleShape)
-                    .border(1.dp, catColor.copy(alpha = 0.35f), CircleShape),
-                contentAlignment = Alignment.Center
+                    .fillMaxWidth()
+                    .background(headerBg)
+                    .padding(horizontal = 14.dp, vertical = 11.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(text = category.emoji, fontSize = 20.sp)
+                Text(
+                    text = "क्र.",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = palette.textPrimary,
+                    modifier = Modifier.width(28.dp)
+                )
+                Text(
+                    text = "तारीख़ व विवरण",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = palette.textPrimary,
+                    modifier = Modifier.weight(1f)
+                )
+                Text(
+                    text = "राशि",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = palette.textPrimary,
+                    textAlign = TextAlign.End,
+                    modifier = Modifier.width(80.dp)
+                )
+                Spacer(modifier = Modifier.width(66.dp))
             }
 
-            Spacer(modifier = Modifier.width(12.dp))
+            HorizontalDivider(thickness = 1.2.dp, color = palette.glassBorderMid)
 
-            Column(modifier = Modifier.weight(1f)) {
+            // Ledger Rows (No burger/category icons)
+            entries.forEachIndexed { index, expense ->
+                val parsedDate = DateUtils.parseDateKey(expense.dateKey)
+                val dateText = if (parsedDate != null) {
+                    val dayName = DateUtils.HINDI_DAYS[parsedDate.dayOfWeek.value - 1]
+                    "${DateUtils.formatHindiDate(parsedDate)} • $dayName"
+                } else {
+                    expense.dateKey
+                }
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(if (index % 2 == 1) altRowBg else Color.Transparent)
+                        .padding(horizontal = 14.dp, vertical = 10.dp)
+                        .testTag("expense_item_${expense.id}"),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "${index + 1}.",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = palette.textSecondary,
+                        modifier = Modifier.width(28.dp)
+                    )
+
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(end = 6.dp)
+                    ) {
+                        Text(
+                            text = expense.note.ifBlank { "खर्च" },
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = palette.textPrimary
+                        )
+                        Text(
+                            text = dateText,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = palette.textSecondary
+                        )
+                    }
+
+                    Text(
+                        text = "₹${DateUtils.formatInr(expense.amount)}",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = AdvancePink,
+                        textAlign = TextAlign.End,
+                        modifier = Modifier.width(80.dp)
+                    )
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.End,
+                        modifier = Modifier.width(66.dp)
+                    ) {
+                        IconButton(
+                            onClick = { onEdit(expense) },
+                            modifier = Modifier
+                                .size(33.dp)
+                                .testTag("edit_expense_${expense.id}")
+                        ) {
+                            Text(text = "✏️", fontSize = 14.sp)
+                        }
+                        IconButton(
+                            onClick = { onDelete(expense) },
+                            modifier = Modifier
+                                .size(33.dp)
+                                .testTag("delete_expense_${expense.id}")
+                        ) {
+                            Text(text = "🗑️", fontSize = 14.sp)
+                        }
+                    }
+                }
+
+                if (index < entries.lastIndex) {
+                    HorizontalDivider(color = palette.divider)
+                }
+            }
+
+            // PDF-style Total Footer Row
+            HorizontalDivider(thickness = 1.3.dp, color = palette.glassBorderMid)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(AdvancePink.copy(alpha = if (palette.isDark) 0.16f else 0.08f))
+                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Text(
-                    text = expense.note.ifBlank { category.labelHindi },
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold,
+                    text = "कुल खर्च (${entries.size} प्रविष्टियाँ)",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.ExtraBold,
                     color = palette.textPrimary
                 )
-                if (expense.note.isNotBlank()) {
-                    Text(
-                        text = category.labelHindi,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = catColor
-                    )
-                }
                 Text(
-                    text = dateText,
-                    fontSize = 11.sp,
-                    color = palette.textMuted
-                )
-            }
-
-            Column(horizontalAlignment = Alignment.End) {
-                Text(
-                    text = "₹${DateUtils.formatInr(expense.amount)}",
+                    text = "₹${DateUtils.formatInr(totalExpense)}",
                     fontSize = 16.sp,
                     fontWeight = FontWeight.ExtraBold,
                     color = AdvancePink
                 )
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(2.dp)
-                ) {
-                    IconButton(
-                        onClick = onEdit,
-                        modifier = Modifier
-                            .size(36.dp)
-                            .testTag("edit_expense_${expense.id}")
-                    ) {
-                        Text(text = "✏️", fontSize = 15.sp)
-                    }
-                    IconButton(
-                        onClick = onDelete,
-                        modifier = Modifier
-                            .size(36.dp)
-                            .testTag("delete_expense_${expense.id}")
-                    ) {
-                        Text(text = "🗑️", fontSize = 15.sp)
-                    }
-                }
             }
         }
     }
@@ -783,7 +811,6 @@ private fun ExpenseDatePickerModal(
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun EditExpenseDialog(
     expense: ExpenseRecord,
@@ -795,9 +822,7 @@ private fun EditExpenseDialog(
         val rounded = if (expense.amount % 1.0 == 0.0) expense.amount.toLong().toString() else expense.amount.toString()
         mutableStateOf(rounded)
     }
-    var selectedCategory by remember(expense.id) {
-        mutableStateOf(ExpenseCategory.fromId(expense.category))
-    }
+    val preservedCategory = remember(expense.id) { ExpenseCategory.fromId(expense.category) }
     var noteText by remember(expense.id) { mutableStateOf(expense.note) }
     var selectedDate by remember(expense.id) {
         mutableStateOf(DateUtils.parseDateKey(expense.dateKey) ?: LocalDate.now())
@@ -848,36 +873,6 @@ private fun EditExpenseDialog(
                         .testTag("edit_expense_amount_input")
                 )
 
-                FlowRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    ExpenseCategory.entries.forEach { cat ->
-                        val isSelected = cat == selectedCategory
-                        val catColor = Color(cat.colorHex)
-                        Surface(
-                            shape = RoundedCornerShape(50),
-                            color = if (isSelected) catColor.copy(alpha = 0.18f) else palette.segmentedTrackBg,
-                            border = BorderStroke(
-                                width = if (isSelected) 1.5.dp else 1.dp,
-                                color = if (isSelected) catColor else palette.glassBorderMid
-                            ),
-                            modifier = Modifier
-                                .clickable { selectedCategory = cat }
-                                .testTag("edit_expense_cat_${cat.id}")
-                        ) {
-                            Text(
-                                text = "${cat.emoji} ${cat.labelHindi}",
-                                fontSize = 11.sp,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                color = if (isSelected) catColor else palette.textSecondary,
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp)
-                            )
-                        }
-                    }
-                }
-
                 OutlinedTextField(
                     value = noteText,
                     onValueChange = { noteText = it },
@@ -925,26 +920,29 @@ private fun EditExpenseDialog(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End
                 ) {
-                    OutlinedButton(
+                    LiquidGlassOutlinedButton(
                         onClick = onDismiss,
+                        borderColor = palette.fieldUnfocusedBorder,
                         shape = RoundedCornerShape(14.dp),
-                        border = BorderStroke(1.dp, palette.fieldUnfocusedBorder)
+                        minHeight = 44.dp
                     ) {
-                        Text("रद्द करें", color = palette.textSecondary, fontWeight = FontWeight.SemiBold)
+                        Text("रद्द करें", color = palette.textPrimary, fontWeight = FontWeight.Bold)
                     }
                     Spacer(modifier = Modifier.width(10.dp))
-                    Button(
+                    LiquidGlassButton(
                         onClick = {
                             val amt = amountText.toDoubleOrNull() ?: 0.0
                             if (amt > 0.0) {
-                                onSave(amt, selectedCategory, noteText, DateUtils.toDateKey(selectedDate))
+                                onSave(amt, preservedCategory, noteText, DateUtils.toDateKey(selectedDate))
                             }
                         },
-                        colors = ButtonDefaults.buttonColors(containerColor = palette.accent),
+                        containerColor = palette.accent,
+                        secondaryColor = palette.accentSecondary,
                         shape = RoundedCornerShape(14.dp),
+                        minHeight = 44.dp,
                         modifier = Modifier.testTag("confirm_edit_expense_btn")
                     ) {
-                        Text("अपडेट करें ✓", color = Color.White, fontWeight = FontWeight.Bold)
+                        Text("अपडेट करें ✓", color = Color.White, fontWeight = FontWeight.ExtraBold)
                     }
                 }
             }

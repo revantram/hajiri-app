@@ -8,12 +8,9 @@ import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,16 +20,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -48,8 +41,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -58,6 +49,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.hajiri.ui.components.GlassCard
+import com.example.hajiri.ui.components.LiquidGlassButton
+import com.example.hajiri.ui.components.LiquidGlassOutlinedButton
 import com.example.hajiri.ui.components.MonthSelectorWithPickerRow
 import com.example.hajiri.ui.components.outlinedFieldColors
 import com.example.hajiri.ui.theme.AdvancePink
@@ -74,7 +67,6 @@ import com.example.hajiri.viewmodel.HajiriViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.time.YearMonth
 
 @Composable
 fun ReportsScreen(
@@ -128,10 +120,6 @@ fun ReportsScreen(
         }
     }
 
-    val animatedSweep by animateFloatAsState(
-        targetValue = (stats.attendancePercentage / 100f) * 360f,
-        label = "sweep_anim"
-    )
 
     Column(
         modifier = modifier
@@ -168,73 +156,6 @@ fun ReportsScreen(
             onSelectMonth = { viewModel.setReportMonth(it) }
         )
 
-        // Attendance Percentage Ring Card
-        GlassCard {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column {
-                    Text(
-                        text = "उपस्थिति प्रतिशत",
-                        fontSize = 12.sp,
-                        color = palette.textSecondary,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "${stats.attendancePercentage}%",
-                        fontSize = 42.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = palette.textPrimary
-                    )
-                    val totalMonthDays = remember(selectedMonth) {
-                        runCatching { YearMonth.parse(selectedMonth).lengthOfMonth() }.getOrDefault(30)
-                    }
-                    Text(
-                        text = "${SalarySlipPdfGenerator.formatFloatDays(stats.workedDays)} / $totalMonthDays दिन काम किए",
-                        fontSize = 13.sp,
-                        color = palette.accent,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-
-                // Circular Progress Arc
-                Box(
-                    modifier = Modifier.size(105.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Canvas(modifier = Modifier.fillMaxSize()) {
-                        drawCircle(
-                            color = palette.progressTrackBg,
-                            style = Stroke(width = 9.dp.toPx())
-                        )
-                        drawArc(
-                            brush = Brush.linearGradient(listOf(palette.accent, StatusGreen)),
-                            startAngle = -90f,
-                            sweepAngle = animatedSweep,
-                            useCenter = false,
-                            style = Stroke(width = 9.dp.toPx(), cap = StrokeCap.Round)
-                        )
-                    }
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            text = "${stats.attendancePercentage}%",
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = palette.textPrimary
-                        )
-                        Text(
-                            text = "उपस्थिति",
-                            fontSize = 9.sp,
-                            color = palette.textMuted,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-                }
-            }
-        }
 
         // 6-Month Comparison Bar Chart
         GlassCard {
@@ -614,23 +535,23 @@ fun ReportsScreen(
                 Spacer(modifier = Modifier.height(12.dp))
 
                 // Save PDF to Phone (Zero-permission SAF CreateDocument)
-                Button(
+                LiquidGlassButton(
                     onClick = {
                         val safeMonth = selectedMonth.replace(Regex("[^a-zA-Z0-9_-]"), "_")
                         createPdfLauncher.launch("Hajiri_Salary_Slip_$safeMonth.pdf")
                     },
                     enabled = !isPdfBusy,
-                    colors = ButtonDefaults.buttonColors(containerColor = palette.accent),
-                    shape = RoundedCornerShape(14.dp),
+                    containerColor = palette.accent,
+                    secondaryColor = palette.accentSecondary,
+                    shape = RoundedCornerShape(16.dp),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(48.dp)
                         .testTag("save_pdf_slip_btn")
                 ) {
                     Text(
                         text = if (isPdfBusy) "⏳ PDF तैयार हो रहा है..." else "📥 PDF फोन में सेव करें",
                         color = Color.White,
-                        fontWeight = FontWeight.Bold,
+                        fontWeight = FontWeight.ExtraBold,
                         fontSize = 14.sp
                     )
                 }
@@ -642,7 +563,7 @@ fun ReportsScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     // Share PDF directly on WhatsApp / Apps
-                    Button(
+                    LiquidGlassButton(
                         onClick = {
                             isPdfBusy = true
                             val slipData = viewModel.buildMonthlySlipData(
@@ -682,23 +603,23 @@ fun ReportsScreen(
                             }
                         },
                         enabled = !isPdfBusy,
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF25D366)),
-                        shape = RoundedCornerShape(14.dp),
+                        containerColor = Color(0xFF16A34A),
+                        secondaryColor = Color(0xFF15803D),
+                        shape = RoundedCornerShape(16.dp),
                         modifier = Modifier
                             .weight(1.4f)
-                            .height(48.dp)
                             .testTag("share_pdf_slip_btn")
                     ) {
                         Text(
                             text = "📤 WhatsApp / Share PDF",
                             color = Color.White,
-                            fontWeight = FontWeight.Bold,
+                            fontWeight = FontWeight.ExtraBold,
                             fontSize = 13.sp
                         )
                     }
 
                     // Preview / Open PDF
-                    OutlinedButton(
+                    LiquidGlassOutlinedButton(
                         onClick = {
                             isPdfBusy = true
                             val slipData = viewModel.buildMonthlySlipData(
@@ -730,17 +651,16 @@ fun ReportsScreen(
                             }
                         },
                         enabled = !isPdfBusy,
-                        border = BorderStroke(1.2.dp, palette.accent.copy(alpha = 0.5f)),
-                        shape = RoundedCornerShape(14.dp),
+                        borderColor = palette.accent.copy(alpha = 0.55f),
+                        shape = RoundedCornerShape(16.dp),
                         modifier = Modifier
                             .weight(0.9f)
-                            .height(48.dp)
                             .testTag("preview_pdf_slip_btn")
                     ) {
                         Text(
                             text = "👁️ देखें",
                             color = palette.accent,
-                            fontWeight = FontWeight.Bold,
+                            fontWeight = FontWeight.ExtraBold,
                             fontSize = 13.sp
                         )
                     }
@@ -753,13 +673,13 @@ fun ReportsScreen(
             Column {
                 Text(
                     text = "टेक्स्ट रिपोर्ट (Quick Copy & Share)",
-                    fontSize = 13.sp,
-                    color = palette.textSecondary,
-                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp,
+                    color = palette.textPrimary,
+                    fontWeight = FontWeight.ExtraBold,
                     modifier = Modifier.padding(bottom = 12.dp)
                 )
 
-                Button(
+                LiquidGlassButton(
                     onClick = {
                         val reportText = viewModel.getReportText(selectedMonth)
                         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
@@ -767,19 +687,19 @@ fun ReportsScreen(
                         clipboard.setPrimaryClip(clip)
                         viewModel.showMessage("📋 रिपोर्ट कॉपी हो गई!")
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = palette.accentSecondary),
-                    shape = RoundedCornerShape(14.dp),
+                    containerColor = palette.accentSecondary,
+                    secondaryColor = palette.accent,
+                    shape = RoundedCornerShape(16.dp),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(48.dp)
                         .testTag("copy_report_btn")
                 ) {
-                    Text("📄 टेक्स्ट Report Copy करें", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    Text("📄 टेक्स्ट Report Copy करें", color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 14.sp)
                 }
 
                 Spacer(modifier = Modifier.height(10.dp))
 
-                Button(
+                LiquidGlassButton(
                     onClick = {
                         val reportText = viewModel.getReportText(selectedMonth)
                         val sendIntent = Intent().apply {
@@ -789,14 +709,14 @@ fun ReportsScreen(
                         }
                         context.startActivity(Intent.createChooser(sendIntent, "Share Hajiri Report"))
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF128C7E)),
-                    shape = RoundedCornerShape(14.dp),
+                    containerColor = Color(0xFF0F766E),
+                    secondaryColor = Color(0xFF115E59),
+                    shape = RoundedCornerShape(16.dp),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(48.dp)
                         .testTag("share_whatsapp_btn")
                 ) {
-                    Text("💬 WhatsApp टेक्स्ट Share करें", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    Text("💬 WhatsApp टेक्स्ट Share करें", color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 14.sp)
                 }
             }
         }

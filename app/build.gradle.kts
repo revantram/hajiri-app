@@ -3,7 +3,7 @@ import java.time.Duration
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
-    alias(libs.plugins.kotlin.serialization)
+    // alias(libs.plugins.kotlin.serialization) // Unused: commented out for smaller APK & faster builds
     alias(libs.plugins.google.services)
 }
 
@@ -15,10 +15,26 @@ android {
         applicationId = "com.aistudio.hajiri.rxvbkm"
         minSdk = 26
         targetSdk = 36
-        versionCode = 4
-        versionName = "1.3"
+        versionCode = 5
+        versionName = "1.4"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    androidResources {
+        // Keep only English & Hindi resources; strips 75+ unused Play Services/Material3 locales
+        localeFilters += listOf("en", "hi")
+    }
+
+    packaging {
+        resources {
+            excludes += listOf(
+                "DebugProbesKt.bin",
+                "**/*.proto",
+                "META-INF/AL2.0",
+                "META-INF/LGPL2.1"
+            )
+        }
     }
 
     signingConfigs {
@@ -38,7 +54,8 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -83,10 +100,10 @@ dependencies {
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.ui)
     implementation(libs.androidx.ui.graphics)
-    implementation(libs.androidx.ui.tooling.preview)
+    // implementation(libs.androidx.ui.tooling.preview) // Unused
     implementation(libs.androidx.material3)
-    implementation(libs.androidx.navigation.compose)
-    implementation(libs.kotlinx.serialization.json)
+    // implementation(libs.androidx.navigation.compose) // Unused: custom state tab navigation used
+    // implementation(libs.kotlinx.serialization.json) // Unused
 
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.firestore)

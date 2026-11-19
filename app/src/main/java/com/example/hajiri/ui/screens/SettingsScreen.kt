@@ -18,10 +18,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -45,6 +43,8 @@ import androidx.compose.ui.unit.sp
 import com.example.hajiri.model.AppThemeStyle
 import com.example.hajiri.model.WageMode
 import com.example.hajiri.ui.components.GlassCard
+import com.example.hajiri.ui.components.LiquidGlassButton
+import com.example.hajiri.ui.components.LiquidGlassOutlinedButton
 import com.example.hajiri.ui.theme.AdvancePinkBg
 import com.example.hajiri.ui.theme.LocalHajiriPalette
 import com.example.hajiri.ui.theme.OtOrange
@@ -54,8 +54,6 @@ import com.example.hajiri.ui.theme.StatusGreenBg
 import com.example.hajiri.ui.theme.StatusRed
 import com.example.hajiri.ui.theme.StatusRedBg
 import android.Manifest
-import android.content.Intent
-import android.net.Uri
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -66,6 +64,7 @@ import com.example.hajiri.util.AppUpdateChecker
 import com.example.hajiri.util.DailyReminderScheduler
 import com.example.hajiri.util.DateUtils
 import com.example.hajiri.util.UpdateCheckState
+import com.example.hajiri.util.UpdateDownloadState
 import com.example.hajiri.viewmodel.HajiriViewModel
 import com.example.hajiri.viewmodel.SyncStatus
 import com.example.hajiri.widget.HajiriWidgetManager
@@ -86,6 +85,7 @@ fun SettingsScreen(
     val installedVersion by viewModel.installedVersionName.collectAsState()
     val updateRepoSlug by viewModel.updateRepoSlug.collectAsState()
     val updateState by viewModel.updateCheckState.collectAsState()
+    val updateDownloadState by viewModel.updateDownloadState.collectAsState()
     val reminderEnabled by viewModel.reminderEnabled.collectAsState()
     val reminderHour by viewModel.reminderHour.collectAsState()
     val syncStatus by viewModel.syncStatus.collectAsState()
@@ -262,37 +262,34 @@ fun SettingsScreen(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    OutlinedButton(
+                    LiquidGlassOutlinedButton(
                         onClick = { viewModel.showProfileDialog.value = true },
-                        shape = RoundedCornerShape(12.dp),
-                        border = BorderStroke(1.dp, palette.accent.copy(alpha = 0.35f)),
+                        borderColor = palette.accent.copy(alpha = 0.45f),
+                        shape = RoundedCornerShape(14.dp),
                         modifier = Modifier
                             .weight(1f)
-                            .height(48.dp)
                             .testTag("edit_profile_btn")
                     ) {
                         Text(
                             text = "📱 नंबर/नाम बदलें",
                             fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
+                            fontWeight = FontWeight.ExtraBold,
                             color = palette.accent
                         )
                     }
 
-                    Button(
+                    LiquidGlassOutlinedButton(
                         onClick = onSignOut,
-                        colors = ButtonDefaults.buttonColors(containerColor = StatusRedBg),
-                        border = BorderStroke(1.dp, StatusRed.copy(alpha = 0.35f)),
-                        shape = RoundedCornerShape(12.dp),
+                        borderColor = StatusRed.copy(alpha = 0.45f),
+                        shape = RoundedCornerShape(14.dp),
                         modifier = Modifier
                             .weight(1f)
-                            .height(48.dp)
                             .testTag("logout_btn")
                     ) {
                         Text(
                             text = "🚪 लॉगआउट",
                             fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
+                            fontWeight = FontWeight.ExtraBold,
                             color = StatusRed
                         )
                     }
@@ -668,125 +665,178 @@ fun SettingsScreen(
                     )
                 }
 
-                when (val st = updateState) {
-                    is UpdateCheckState.UpdateAvailable -> {
-                        Button(
-                            onClick = {
-                                try {
-                                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(st.releaseInfo.downloadUrl)))
-                                } catch (_: Exception) {
-                                    viewModel.showMessage("⚠️ अपडेट लिंक खुल नहीं सका")
-                                }
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = StatusGreen),
-                            shape = RoundedCornerShape(14.dp),
+                // Live In-App Download Progress & 1-Click Update Check (No external GitHub browser button)
+                when (val dl = updateDownloadState) {
+                    is UpdateDownloadState.Downloading -> {
+                        Surface(
+                            shape = RoundedCornerShape(16.dp),
+                            color = palette.accent.copy(alpha = 0.10f),
+                            border = BorderStroke(1.dp, palette.accent.copy(alpha = 0.35f)),
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(48.dp)
-                                .testTag("settings_one_click_update_btn")
+                                .testTag("settings_update_download_progress_box")
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(14.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "⬇️ ऐप के अंदर डाउनलोड हो रहा है...",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = palette.textPrimary
+                                    )
+                                    Text(
+                                        text = "${dl.percent}%",
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = palette.accent
+                                    )
+                                }
+
+                                LinearProgressIndicator(
+                                    progress = { (dl.percent / 100f).coerceIn(0f, 1f) },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(8.dp),
+                                    color = palette.accent,
+                                    trackColor = palette.progressTrackBg
+                                )
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    val sizeInfo = if (dl.totalBytes > 0L) {
+                                        "${AppUpdateChecker.formatBytesMb(dl.downloadedBytes)} / ${AppUpdateChecker.formatBytesMb(dl.totalBytes)}"
+                                    } else {
+                                        AppUpdateChecker.formatBytesMb(dl.downloadedBytes)
+                                    }
+                                    Text(
+                                        text = sizeInfo,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = palette.textSecondary
+                                    )
+                                    Text(
+                                        text = "✕ रद्द करें",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = StatusRed,
+                                        modifier = Modifier
+                                            .clickable { viewModel.cancelInAppUpdateDownload() }
+                                            .padding(horizontal = 6.dp, vertical = 4.dp)
+                                            .testTag("settings_cancel_download_btn")
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    is UpdateDownloadState.ReadyToInstall -> {
+                        Surface(
+                            shape = RoundedCornerShape(14.dp),
+                            color = StatusGreenBg,
+                            border = BorderStroke(1.dp, StatusGreen.copy(alpha = 0.4f)),
+                            modifier = Modifier.fillMaxWidth()
                         ) {
                             Text(
-                                text = "⬇️ नया अपडेट (${st.releaseInfo.latestTag}) — 1-Click डाउनलोड करें",
+                                text = "✅ अपडेट (${dl.versionTag}) डाउनलोड हो गया है! इंस्टॉल करने के लिए नीचे टैप करें।",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = StatusGreen,
+                                modifier = Modifier.padding(12.dp)
+                            )
+                        }
+                        LiquidGlassButton(
+                            onClick = { viewModel.installDownloadedUpdate(context) },
+                            containerColor = StatusGreen,
+                            secondaryColor = Color(0xFF065F46),
+                            shape = RoundedCornerShape(16.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("settings_install_downloaded_btn")
+                        ) {
+                            Text(
+                                text = "📲 अभी इंस्टॉल करें (${dl.versionTag})",
                                 color = Color.White,
-                                fontSize = 13.sp,
+                                fontSize = 14.sp,
                                 fontWeight = FontWeight.ExtraBold
                             )
                         }
                     }
 
                     else -> {
-                        Button(
-                            onClick = { viewModel.checkForAppUpdate(context, userInitiated = true) },
-                            enabled = st !is UpdateCheckState.Checking,
-                            colors = ButtonDefaults.buttonColors(containerColor = palette.accent),
-                            shape = RoundedCornerShape(14.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(48.dp)
-                                .testTag("check_update_btn")
-                        ) {
-                            Text(
-                                text = if (st is UpdateCheckState.Checking) "⏳ अपडेट चेक हो रहा है..." else "🔄 1-Click अपडेट चेक करें",
-                                color = Color.White,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Bold
-                            )
+                        if (dl is UpdateDownloadState.Error) {
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = StatusRedBg,
+                                border = BorderStroke(1.dp, StatusRed.copy(alpha = 0.35f)),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(
+                                    text = "⚠️ ${dl.message}",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = StatusRed,
+                                    modifier = Modifier.padding(10.dp)
+                                )
+                            }
                         }
 
-                        OutlinedButton(
-                            onClick = {
-                                val directUrl = AppUpdateChecker.buildLatestReleaseUrl(updateRepoSlug)
-                                try {
-                                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(directUrl)))
-                                } catch (_: Exception) {
-                                    viewModel.showMessage("⚠️ GitHub लिंक खुल नहीं सका")
+                        when (val st = updateState) {
+                            is UpdateCheckState.UpdateAvailable -> {
+                                LiquidGlassButton(
+                                    onClick = {
+                                        viewModel.startInAppUpdateDownload(context, st.releaseInfo)
+                                    },
+                                    containerColor = StatusGreen,
+                                    secondaryColor = Color(0xFF065F46),
+                                    shape = RoundedCornerShape(16.dp),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .testTag("settings_one_click_update_btn")
+                                ) {
+                                    Text(
+                                        text = "⬇️ नया अपडेट (${st.releaseInfo.latestTag}) — यहीं डाउनलोड करें",
+                                        color = Color.White,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.ExtraBold
+                                    )
                                 }
-                            },
-                            border = BorderStroke(1.dp, palette.accent.copy(alpha = 0.4f)),
-                            shape = RoundedCornerShape(14.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(48.dp)
-                                .testTag("settings_github_direct_download_btn")
-                        ) {
-                            Text(
-                                text = "🌐 GitHub से सीधा नया APK डाउनलोड करें",
-                                color = palette.accent,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold
-                            )
+                            }
+
+                            else -> {
+                                LiquidGlassButton(
+                                    onClick = { viewModel.checkForAppUpdate(context, userInitiated = true) },
+                                    enabled = st !is UpdateCheckState.Checking,
+                                    containerColor = palette.accent,
+                                    secondaryColor = palette.accentSecondary,
+                                    shape = RoundedCornerShape(16.dp),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .testTag("check_update_btn")
+                                ) {
+                                    Text(
+                                        text = if (st is UpdateCheckState.Checking) "⏳ अपडेट चेक हो रहा है..." else "🔄 1-Click अपडेट चेक करें",
+                                        color = Color.White,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.ExtraBold
+                                    )
+                                }
+                            }
                         }
                     }
                 }
             }
         }
 
-        // Danger zone
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(
-                text = "⚠️ खतरनाक ज़ोन",
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-                color = palette.textSecondary,
-                letterSpacing = 0.8.sp
-            )
-
-            Button(
-                onClick = { viewModel.showClearMonthDialog.value = true },
-                colors = ButtonDefaults.buttonColors(containerColor = StatusRedBg),
-                border = BorderStroke(1.dp, StatusRed.copy(alpha = 0.3f)),
-                shape = RoundedCornerShape(14.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(50.dp)
-                    .testTag("clear_month_data_btn")
-            ) {
-                Text(
-                    text = "🗑️ इस महीने का डेटा मिटाएं",
-                    color = StatusRed,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-
-            Button(
-                onClick = { viewModel.showClearAllDialog.value = true },
-                colors = ButtonDefaults.buttonColors(containerColor = StatusRedBg),
-                border = BorderStroke(1.dp, StatusRed.copy(alpha = 0.3f)),
-                shape = RoundedCornerShape(14.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(50.dp)
-                    .testTag("clear_all_data_btn")
-            ) {
-                Text(
-                    text = "⛔ सारा डेटा मिटाएं",
-                    color = StatusRed,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-        }
 
         Spacer(modifier = Modifier.height(90.dp))
     }

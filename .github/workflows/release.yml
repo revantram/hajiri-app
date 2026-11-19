@@ -123,9 +123,9 @@ jobs:
             fi
           fi
 
-      - name: Build Release & Debug APKs from Source
+      - name: Build Optimized Release APK from Source
         if: steps.cfg.outputs.can_build == 'true'
-        run: gradle assembleRelease assembleDebug --no-daemon
+        run: gradle assembleRelease --no-daemon
 
       - name: Prepare Release APK Assets
         if: steps.cfg.outputs.can_build == 'true'
@@ -137,9 +137,6 @@ jobs:
           else
             echo "Error: Release APK build output not found"
             exit 1
-          fi
-          if [ -f "app/build/outputs/apk/debug/app-debug.apk" ]; then
-            cp app/build/outputs/apk/debug/app-debug.apk "release-assets/Hajiri-v${VER}-Debug.apk"
           fi
           ls -lh release-assets/
 
@@ -176,7 +173,7 @@ jobs:
 
             नीचे **Assets** से **`Hajiri-v${{ steps.ver.outputs.version }}-Release.apk`** पर क्लिक करके सीधे अपने Android फोन में डाउनलोड और इंस्टॉल करें। ऐप के अंदर **ऑटो अपडेट** भी इसी GitHub Release से नया वर्ज़न अपने आप पहचान लेता है।
 
-            - **`Hajiri-v${{ steps.ver.outputs.version }}-Release.apk`** — मुख्य रिलीज़ ऐप (Recommended)
+            - **`Hajiri-v${{ steps.ver.outputs.version }}-Release.apk`** — ऑप्टिमाइज़्ड व छोटे साइज़ का मुख्य रिलीज़ ऐप (Recommended)
           files: |
             release-assets/*.apk
         env:

@@ -64,13 +64,16 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.SelectableDates
 import androidx.compose.material3.rememberDatePickerState
 import com.example.hajiri.ui.theme.OtOrange
 import com.example.hajiri.ui.theme.StatusGreenBg
+import com.example.hajiri.util.AppReleaseInfo
 import com.example.hajiri.util.AppUpdateChecker
 import com.example.hajiri.util.DateUtils
 import com.example.hajiri.util.UpdateCheckState
+import com.example.hajiri.util.UpdateDownloadState
 import com.example.hajiri.viewmodel.PreviousMonthBalanceItem
 import java.time.Instant
 import java.time.LocalDate
@@ -1112,11 +1115,14 @@ fun AppUpdateDialog(
     installedVersion: String,
     repoSlug: String,
     updateState: UpdateCheckState,
+    downloadState: UpdateDownloadState,
     autoCheckEnabled: Boolean,
     onToggleAutoCheck: (Boolean) -> Unit,
     onCheckNow: () -> Unit,
     onSaveRepo: (String) -> Unit,
-    onOpenUrl: (String) -> Unit,
+    onStartDownload: (AppReleaseInfo) -> Unit,
+    onCancelDownload: () -> Unit,
+    onInstallDownloaded: () -> Unit,
     onDismiss: () -> Unit
 ) {
     val palette = LocalHajiriPalette.current
@@ -1127,8 +1133,8 @@ fun AppUpdateDialog(
         Card(
             shape = RoundedCornerShape(28.dp),
             colors = CardDefaults.cardColors(containerColor = palette.glassCardHigh),
-            border = BorderStroke(1.2.dp, palette.glassBorderTop),
-            modifier = Modifier.shadow(16.dp, RoundedCornerShape(28.dp), spotColor = Color(0x24312E81))
+            border = BorderStroke(1.3.dp, palette.glassBorderTop),
+            modifier = Modifier.shadow(18.dp, RoundedCornerShape(28.dp), spotColor = Color(0x2E0F172A))
         ) {
             Column(
                 modifier = Modifier
@@ -1153,7 +1159,7 @@ fun AppUpdateDialog(
                         Text(
                             text = "v$installedVersion",
                             fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
+                            fontWeight = FontWeight.ExtraBold,
                             color = palette.accent,
                             modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
                         )
@@ -1173,8 +1179,8 @@ fun AppUpdateDialog(
                             Text(
                                 text = "⏳ नया अपडेट चेक किया जा रहा है...",
                                 fontSize = 13.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = palette.textSecondary,
+                                fontWeight = FontWeight.Bold,
+                                color = palette.textPrimary,
                                 modifier = Modifier.padding(16.dp)
                             )
                         }
@@ -1201,7 +1207,7 @@ fun AppUpdateDialog(
                                 Text(
                                     text = info.releaseName,
                                     fontSize = 12.sp,
-                                    fontWeight = FontWeight.SemiBold,
+                                    fontWeight = FontWeight.Bold,
                                     color = palette.textPrimary
                                 )
                                 if (info.releaseNotes.isNotBlank()) {
@@ -1216,40 +1222,131 @@ fun AppUpdateDialog(
 
                         Spacer(modifier = Modifier.height(12.dp))
 
-                        Button(
-                            onClick = { onOpenUrl(info.downloadUrl) },
-                            colors = ButtonDefaults.buttonColors(containerColor = StatusGreen),
-                            shape = RoundedCornerShape(14.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(48.dp)
-                                .testTag("one_click_update_btn")
-                        ) {
-                            Text(
-                                text = "⬇️ 1-Click अपडेट करें (${info.latestTag})",
-                                color = Color.White,
-                                fontWeight = FontWeight.ExtraBold,
-                                fontSize = 14.sp
-                            )
-                        }
+                        when (downloadState) {
+                            is UpdateDownloadState.Downloading -> {
+                                Surface(
+                                    shape = RoundedCornerShape(16.dp),
+                                    color = palette.accent.copy(alpha = 0.10f),
+                                    border = BorderStroke(1.dp, palette.accent.copy(alpha = 0.35f)),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .testTag("dialog_update_download_progress")
+                                ) {
+                                    Column(
+                                        modifier = Modifier.padding(14.dp),
+                                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                text = "⬇️ डाउनलोड हो रहा है...",
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.ExtraBold,
+                                                color = palette.textPrimary
+                                            )
+                                            Text(
+                                                text = "${downloadState.percent}%",
+                                                fontSize = 14.sp,
+                                                fontWeight = FontWeight.ExtraBold,
+                                                color = palette.accent
+                                            )
+                                        }
+                                        LinearProgressIndicator(
+                                            progress = { (downloadState.percent / 100f).coerceIn(0f, 1f) },
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height(8.dp),
+                                            color = palette.accent,
+                                            trackColor = palette.progressTrackBg
+                                        )
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            val sizeLabel = if (downloadState.totalBytes > 0L) {
+                                                "${AppUpdateChecker.formatBytesMb(downloadState.downloadedBytes)} / ${AppUpdateChecker.formatBytesMb(downloadState.totalBytes)}"
+                                            } else {
+                                                AppUpdateChecker.formatBytesMb(downloadState.downloadedBytes)
+                                            }
+                                            Text(
+                                                text = sizeLabel,
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = palette.textSecondary
+                                            )
+                                            Text(
+                                                text = "✕ रद्द करें",
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.ExtraBold,
+                                                color = StatusRed,
+                                                modifier = Modifier
+                                                    .clickable { onCancelDownload() }
+                                                    .padding(horizontal = 6.dp, vertical = 4.dp)
+                                                    .testTag("dialog_cancel_download_btn")
+                                            )
+                                        }
+                                    }
+                                }
+                            }
 
-                        if (info.releasePageUrl.isNotBlank() && info.releasePageUrl != info.downloadUrl) {
-                            Spacer(modifier = Modifier.height(8.dp))
-                            OutlinedButton(
-                                onClick = { onOpenUrl(info.releasePageUrl) },
-                                border = BorderStroke(1.dp, palette.accent.copy(alpha = 0.4f)),
-                                shape = RoundedCornerShape(14.dp),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(44.dp)
-                                    .testTag("open_release_page_btn")
-                            ) {
-                                Text(
-                                    text = "📄 रिलीज़ पेज खोलें",
-                                    color = palette.accent,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 13.sp
-                                )
+                            is UpdateDownloadState.ReadyToInstall -> {
+                                LiquidGlassButton(
+                                    onClick = onInstallDownloaded,
+                                    containerColor = StatusGreen,
+                                    secondaryColor = Color(0xFF065F46),
+                                    shape = RoundedCornerShape(16.dp),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .testTag("dialog_install_update_btn")
+                                ) {
+                                    Text(
+                                        text = "📲 अभी इंस्टॉल करें (${downloadState.versionTag})",
+                                        color = Color.White,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        fontSize = 14.sp
+                                    )
+                                }
+                            }
+
+                            else -> {
+                                if (downloadState is UpdateDownloadState.Error) {
+                                    Surface(
+                                        shape = RoundedCornerShape(12.dp),
+                                        color = StatusRedBg,
+                                        border = BorderStroke(1.dp, StatusRed.copy(alpha = 0.35f)),
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(bottom = 8.dp)
+                                    ) {
+                                        Text(
+                                            text = "⚠️ ${downloadState.message}",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = StatusRed,
+                                            modifier = Modifier.padding(10.dp)
+                                        )
+                                    }
+                                }
+                                LiquidGlassButton(
+                                    onClick = { onStartDownload(info) },
+                                    containerColor = StatusGreen,
+                                    secondaryColor = Color(0xFF065F46),
+                                    shape = RoundedCornerShape(16.dp),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .testTag("one_click_update_btn")
+                                ) {
+                                    Text(
+                                        text = "⬇️ 1-Click डाउनलोड व अपडेट (${info.latestTag})",
+                                        color = Color.White,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        fontSize = 14.sp
+                                    )
+                                }
                             }
                         }
                     }
@@ -1264,7 +1361,7 @@ fun AppUpdateDialog(
                             Text(
                                 text = "✅ आपका ऐप नवीनतम वर्ज़न (v${updateState.currentVersion} / ${updateState.latestTag}) पर है।",
                                 fontSize = 13.sp,
-                                fontWeight = FontWeight.SemiBold,
+                                fontWeight = FontWeight.Bold,
                                 color = StatusGreen,
                                 modifier = Modifier.padding(14.dp)
                             )
@@ -1281,7 +1378,7 @@ fun AppUpdateDialog(
                             Text(
                                 text = "⚠️ ${updateState.message}",
                                 fontSize = 12.sp,
-                                fontWeight = FontWeight.Medium,
+                                fontWeight = FontWeight.Bold,
                                 color = StatusRed,
                                 modifier = Modifier.padding(14.dp)
                             )
@@ -1290,29 +1387,10 @@ fun AppUpdateDialog(
 
                     UpdateCheckState.Idle -> {
                         Text(
-                            text = "नया वर्ज़न आने पर 1 क्लिक में सीधे GitHub से अपडेट APK खोलें।",
+                            text = "नया वर्ज़न आने पर 1 क्लिक में सीधे ऐप के अंदर डाउनलोड और इंस्टॉल करें।",
                             fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium,
                             color = palette.textSecondary
-                        )
-                    }
-                }
-
-                if (updateState !is UpdateCheckState.UpdateAvailable) {
-                    Spacer(modifier = Modifier.height(10.dp))
-                    OutlinedButton(
-                        onClick = { onOpenUrl(AppUpdateChecker.buildLatestReleaseUrl(repoSlug)) },
-                        border = BorderStroke(1.dp, palette.accent.copy(alpha = 0.45f)),
-                        shape = RoundedCornerShape(14.dp),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(46.dp)
-                            .testTag("dialog_open_github_direct_btn")
-                    ) {
-                        Text(
-                            text = "⬇️ GitHub से सीधा APK पेज खोलें",
-                            color = palette.accent,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 12.sp
                         )
                     }
                 }
@@ -1328,7 +1406,7 @@ fun AppUpdateDialog(
                     Text(
                         text = "ऑटो अपडेट चेक",
                         fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold,
+                        fontWeight = FontWeight.Bold,
                         color = palette.textPrimary
                     )
                     androidx.compose.material3.Switch(
@@ -1341,7 +1419,7 @@ fun AppUpdateDialog(
                     text = if (showRepoEditor) "▲ रिपो सेटिंग छुपाएं" else "⚙️ अपडेट स्रोत बदलें ($repoSlug)",
                     fontSize = 11.sp,
                     color = palette.accent,
-                    fontWeight = FontWeight.SemiBold,
+                    fontWeight = FontWeight.Bold,
                     modifier = Modifier
                         .clickable { showRepoEditor = !showRepoEditor }
                         .padding(vertical = 6.dp)
@@ -1361,13 +1439,15 @@ fun AppUpdateDialog(
                             .testTag("update_repo_input")
                     )
                     Spacer(modifier = Modifier.height(8.dp))
-                    Button(
+                    LiquidGlassButton(
                         onClick = { onSaveRepo(repoInput) },
-                        colors = ButtonDefaults.buttonColors(containerColor = palette.accent),
-                        shape = RoundedCornerShape(12.dp),
+                        containerColor = palette.accent,
+                        secondaryColor = palette.accentSecondary,
+                        shape = RoundedCornerShape(14.dp),
+                        minHeight = 44.dp,
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("स्रोत सेव करें व चेक करें", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        Text("स्रोत सेव करें व चेक करें", color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 12.sp)
                     }
                 }
 
@@ -1377,21 +1457,24 @@ fun AppUpdateDialog(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    OutlinedButton(
+                    LiquidGlassOutlinedButton(
                         onClick = onDismiss,
+                        borderColor = palette.fieldUnfocusedBorder,
                         shape = RoundedCornerShape(14.dp),
-                        border = BorderStroke(1.dp, palette.fieldUnfocusedBorder)
+                        minHeight = 44.dp
                     ) {
-                        Text("बाद में", color = palette.textSecondary, fontWeight = FontWeight.SemiBold)
+                        Text("बाद में", color = palette.textPrimary, fontWeight = FontWeight.Bold)
                     }
-                    Button(
+                    LiquidGlassButton(
                         onClick = onCheckNow,
-                        enabled = updateState !is UpdateCheckState.Checking,
-                        colors = ButtonDefaults.buttonColors(containerColor = palette.accent),
+                        enabled = updateState !is UpdateCheckState.Checking && downloadState !is UpdateDownloadState.Downloading,
+                        containerColor = palette.accent,
+                        secondaryColor = palette.accentSecondary,
                         shape = RoundedCornerShape(14.dp),
+                        minHeight = 44.dp,
                         modifier = Modifier.testTag("dialog_check_update_btn")
                     ) {
-                        Text("🔄 अभी चेक करें", color = Color.White, fontWeight = FontWeight.Bold)
+                        Text("🔄 अभी चेक करें", color = Color.White, fontWeight = FontWeight.ExtraBold)
                     }
                 }
             }

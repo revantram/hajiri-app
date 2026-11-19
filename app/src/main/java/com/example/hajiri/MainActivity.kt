@@ -70,7 +70,6 @@ import com.example.hajiri.ui.components.ThemePickerDialog
 import com.example.hajiri.ui.components.WorkDaysDialog
 import com.example.hajiri.ui.components.WorkSitesDialog
 import com.example.hajiri.ui.screens.AuthScreen
-import com.example.hajiri.ui.screens.CalendarScreen
 import com.example.hajiri.ui.screens.ExpenseScreen
 import com.example.hajiri.ui.screens.HistoryScreen
 import com.example.hajiri.ui.screens.HomeScreen
@@ -209,8 +208,6 @@ fun MainApp(
     val showSalary by viewModel.showSalaryDialog.collectAsState()
     val showWorkDays by viewModel.showWorkDaysDialog.collectAsState()
     val showAdvance by viewModel.showAdvanceDialog.collectAsState()
-    val showClearMonth by viewModel.showClearMonthDialog.collectAsState()
-    val showClearAll by viewModel.showClearAllDialog.collectAsState()
     val showProfile by viewModel.showProfileDialog.collectAsState()
     val showTheme by viewModel.showThemeDialog.collectAsState()
     val showUpdate by viewModel.showUpdateDialog.collectAsState()
@@ -221,6 +218,7 @@ fun MainApp(
     val installedVersion by viewModel.installedVersionName.collectAsState()
     val updateRepoSlug by viewModel.updateRepoSlug.collectAsState()
     val updateState by viewModel.updateCheckState.collectAsState()
+    val updateDownloadState by viewModel.updateDownloadState.collectAsState()
 
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -285,18 +283,18 @@ fun MainApp(
         }
     }
 
-    // Ethereal Liquid Iridescent Ambient Background
+    // Ethereal iPhone Liquid Glass Iridescent Ambient Background
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(
                 brush = Brush.verticalGradient(
                     colors = listOf(
+                        palette.meshTopLeft.copy(alpha = if (palette.isDark) 0.92f else 0.72f),
                         palette.background,
-                        palette.meshTopLeft.copy(alpha = if (palette.isDark) 0.75f else 0.45f),
-                        palette.meshCenter.copy(alpha = if (palette.isDark) 0.75f else 0.35f),
-                        palette.meshTopRight.copy(alpha = if (palette.isDark) 0.7f else 0.35f),
-                        palette.meshBottom.copy(alpha = if (palette.isDark) 0.75f else 0.45f)
+                        palette.meshCenter.copy(alpha = if (palette.isDark) 0.85f else 0.58f),
+                        palette.meshTopRight.copy(alpha = if (palette.isDark) 0.80f else 0.55f),
+                        palette.meshBottom.copy(alpha = if (palette.isDark) 0.90f else 0.68f)
                     )
                 )
             )
@@ -327,7 +325,6 @@ fun MainApp(
                 } else {
                     when (currentTab) {
                         HajiriTab.HOME -> HomeScreen(viewModel = viewModel)
-                        HajiriTab.CALENDAR -> CalendarScreen(viewModel = viewModel)
                         HajiriTab.REPORTS -> ReportsScreen(viewModel = viewModel)
                         HajiriTab.EXPENSE -> ExpenseScreen(viewModel = viewModel)
                         HajiriTab.SETTINGS -> SettingsScreen(
@@ -404,29 +401,12 @@ fun MainApp(
             )
         }
 
-        if (showClearMonth) {
-            ConfirmActionDialog(
-                title = "🗑️ इस महीने का डेटा मिटाएं?",
-                message = "क्या आप वर्तमान महीने की सभी हाजिरी, OT और एडवांस रिकॉर्ड मिटाना चाहते हैं?",
-                onDismiss = { viewModel.showClearMonthDialog.value = false },
-                onConfirm = { viewModel.clearMonthData() }
-            )
-        }
-
-        if (showClearAll) {
-            ConfirmActionDialog(
-                title = "⛔ सारा डेटा मिटाएं?",
-                message = "सावधानी: यह कार्रवाई सभी महीनों की हाजिरी, OT, एडवांस और रिकॉर्ड को हमेशा के लिए हटा देगी!",
-                onDismiss = { viewModel.showClearAllDialog.value = false },
-                onConfirm = { viewModel.clearAllData() }
-            )
-        }
-
         if (showUpdate) {
             AppUpdateDialog(
                 installedVersion = installedVersion,
                 repoSlug = updateRepoSlug,
                 updateState = updateState,
+                downloadState = updateDownloadState,
                 autoCheckEnabled = autoUpdateEnabled,
                 onToggleAutoCheck = { enabled ->
                     viewModel.setAutoUpdateCheckEnabled(context, enabled)
@@ -437,15 +417,14 @@ fun MainApp(
                 onSaveRepo = { slug ->
                     viewModel.saveUpdateRepoSlug(context, slug)
                 },
-                onOpenUrl = { url ->
-                    if (url.isNotBlank()) {
-                        try {
-                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-                            context.startActivity(intent)
-                        } catch (_: Exception) {
-                            viewModel.showMessage("⚠️ अपडेट लिंक खुल नहीं सका")
-                        }
-                    }
+                onStartDownload = { releaseInfo ->
+                    viewModel.startInAppUpdateDownload(context, releaseInfo)
+                },
+                onCancelDownload = {
+                    viewModel.cancelInAppUpdateDownload()
+                },
+                onInstallDownloaded = {
+                    viewModel.installDownloadedUpdate(context)
                 },
                 onDismiss = { viewModel.showUpdateDialog.value = false }
             )
@@ -489,8 +468,8 @@ fun FloatingLiquidDock(
         modifier = Modifier
             .fillMaxWidth()
             .padding(
-                start = 16.dp,
-                end = 16.dp,
+                start = 18.dp,
+                end = 18.dp,
                 bottom = 10.dp + navInsets.calculateBottomPadding()
             ),
         contentAlignment = Alignment.Center
@@ -499,15 +478,15 @@ fun FloatingLiquidDock(
             modifier = Modifier
                 .fillMaxWidth()
                 .shadow(
-                    elevation = 16.dp,
-                    shape = RoundedCornerShape(32.dp),
-                    ambientColor = Color(0x1F000000),
-                    spotColor = Color(0x2E312E81)
+                    elevation = 20.dp,
+                    shape = RoundedCornerShape(34.dp),
+                    ambientColor = Color(0x29000000),
+                    spotColor = palette.accent.copy(alpha = 0.28f)
                 ),
-            shape = RoundedCornerShape(32.dp),
-            color = palette.glassCardHigh,
+            shape = RoundedCornerShape(34.dp),
+            color = palette.glassCardHigh.copy(alpha = if (palette.isDark) 0.88f else 0.86f),
             border = BorderStroke(
-                width = 1.2.dp,
+                width = 1.4.dp,
                 brush = Brush.verticalGradient(
                     colors = listOf(
                         palette.glassBorderTop,
@@ -520,23 +499,40 @@ fun FloatingLiquidDock(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 7.dp),
-                horizontalArrangement = Arrangement.SpaceAround,
+                    .background(
+                        brush = Brush.verticalGradient(
+                            0.0f to palette.glassSheenTop,
+                            0.45f to Color.Transparent
+                        )
+                    )
+                    .padding(horizontal = 10.dp, vertical = 7.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 HajiriTab.entries.forEach { tab ->
                     val isSelected = tab == selectedTab
                     Surface(
-                        shape = RoundedCornerShape(20.dp),
-                        color = if (isSelected) palette.accent.copy(alpha = 0.14f) else Color.Transparent,
-                        border = if (isSelected) BorderStroke(1.dp, palette.accent.copy(alpha = 0.3f)) else null,
+                        shape = RoundedCornerShape(22.dp),
+                        color = if (isSelected) palette.accent.copy(alpha = if (palette.isDark) 0.28f else 0.16f) else Color.Transparent,
+                        border = if (isSelected) {
+                            BorderStroke(
+                                1.2.dp,
+                                Brush.verticalGradient(
+                                    listOf(
+                                        palette.glassBorderTop,
+                                        palette.accent.copy(alpha = 0.48f)
+                                    )
+                                )
+                            )
+                        } else null,
                         modifier = Modifier
+                            .weight(1f)
                             .clickable { onTabSelected(tab) }
                             .testTag("nav_tab_${tab.name.lowercase()}")
                     ) {
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 7.dp)
                         ) {
                             Text(
                                 text = tab.iconText,
@@ -544,9 +540,9 @@ fun FloatingLiquidDock(
                             )
                             Text(
                                 text = tab.label,
-                                fontSize = 10.sp,
-                                fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Medium,
-                                color = if (isSelected) palette.accent else palette.textMuted
+                                fontSize = 11.sp,
+                                fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Bold,
+                                color = if (isSelected) palette.accent else palette.textSecondary
                             )
                         }
                     }

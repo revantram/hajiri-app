@@ -19,6 +19,7 @@ import com.example.hajiri.model.UserSettings
 import com.example.hajiri.model.WageMode
 import com.example.hajiri.model.WorkSite
 import android.content.Context
+import com.example.hajiri.util.AppReleaseInfo
 import com.example.hajiri.util.AppUpdateChecker
 import com.example.hajiri.util.DailyReminderScheduler
 import com.example.hajiri.util.DateUtils
@@ -26,7 +27,9 @@ import com.example.hajiri.util.ExpenseReportPdfData
 import com.example.hajiri.util.MonthlySlipDailyRow
 import com.example.hajiri.util.MonthlySlipData
 import com.example.hajiri.util.UpdateCheckState
+import com.example.hajiri.util.UpdateDownloadState
 import com.google.firebase.firestore.FirebaseFirestoreException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -47,7 +50,6 @@ import kotlin.coroutines.cancellation.CancellationException
 
 enum class HajiriTab(val label: String, val iconText: String) {
     HOME("होम", "🏠"),
-    CALENDAR("कैलेंडर", "📅"),
     REPORTS("रिपोर्ट", "📊"),
     EXPENSE("खर्च", "💸"),
     SETTINGS("सेटिंग्स", "⚙️")
@@ -212,12 +214,16 @@ class HajiriViewModel(
     private val _updateRepoSlug = MutableStateFlow(AppUpdateChecker.DEFAULT_GITHUB_REPO)
     val updateRepoSlug: StateFlow<String> = _updateRepoSlug.asStateFlow()
 
-    private val _installedVersionName = MutableStateFlow("1.3")
+    private val _installedVersionName = MutableStateFlow("1.4")
     val installedVersionName: StateFlow<String> = _installedVersionName.asStateFlow()
 
     private val _updateCheckState = MutableStateFlow<UpdateCheckState>(UpdateCheckState.Idle)
     val updateCheckState: StateFlow<UpdateCheckState> = _updateCheckState.asStateFlow()
 
+    private val _updateDownloadState = MutableStateFlow<UpdateDownloadState>(UpdateDownloadState.Idle)
+    val updateDownloadState: StateFlow<UpdateDownloadState> = _updateDownloadState.asStateFlow()
+
+    private var updateDownloadJob: Job? = null
     private var hasRunStartupUpdateCheck = false
 
     // Current Month Stats for Home (reacts automatically when todayMonthKey rolls over)
@@ -1079,6 +1085,72 @@ class HajiriViewModel(
                 }
                 else -> Unit
             }
+        }
+    }
+
+    fun startInAppUpdateDownload(context: Context, releaseInfo: AppReleaseInfo) {
+        val appContext = context.applicationContext
+        if (_updateDownloadState.value is UpdateDownloadState.Downloading) return
+        if (!releaseInfo.downloadUrl.endsWith(".apk", ignoreCase = true) &&
+            !releaseInfo.downloadUrl.contains("/releases/download/", ignoreCase = true)
+        ) {
+            _updateDownloadState.value = UpdateDownloadState.Error("इस रिलीज़ में सीधा APK फ़ाइल लिंक नहीं मिला")
+            showMessage("⚠️ इस रिलीज़ में APK फ़ाइल नहीं मिली")
+            return
+        }
+
+        updateDownloadJob?.cancel()
+        updateDownloadJob = viewModelScope.launch {
+            _updateDownloadState.value = UpdateDownloadState.Downloading(0, 0L, -1L)
+            val result = AppUpdateChecker.downloadApkWithProgress(
+                context = appContext,
+                downloadUrl = releaseInfo.downloadUrl,
+                versionTag = releaseInfo.latestTag
+            ) { percent, downloadedBytes, totalBytes ->
+                _updateDownloadState.value = UpdateDownloadState.Downloading(
+                    percent = percent,
+                    downloadedBytes = downloadedBytes,
+                    totalBytes = totalBytes
+                )
+            }
+            result.onSuccess { apkFile ->
+                _updateDownloadState.value = UpdateDownloadState.ReadyToInstall(
+                    apkFile = apkFile,
+                    versionTag = releaseInfo.latestTag
+                )
+                installDownloadedUpdate(appContext)
+            }.onFailure { err ->
+                if (err is CancellationException) {
+                    _updateDownloadState.value = UpdateDownloadState.Idle
+                    throw err
+                }
+                val msg = err.message?.ifBlank { "डाउनलोड विफल रहा" } ?: "डाउनलोड विफल रहा"
+                _updateDownloadState.value = UpdateDownloadState.Error(msg)
+                showMessage("⚠️ अपडेट डाउनलोड नहीं हो सका: $msg")
+            }
+        }
+    }
+
+    fun cancelInAppUpdateDownload() {
+        updateDownloadJob?.cancel()
+        updateDownloadJob = null
+        _updateDownloadState.value = UpdateDownloadState.Idle
+        showMessage("अपडेट डाउनलोड रद्द किया गया")
+    }
+
+    fun installDownloadedUpdate(context: Context) {
+        val ready = _updateDownloadState.value as? UpdateDownloadState.ReadyToInstall ?: return
+        if (!ready.apkFile.exists()) {
+            _updateDownloadState.value = UpdateDownloadState.Error("डाउनलोड की गई APK फ़ाइल नहीं मिली, दोबारा डाउनलोड करें")
+            return
+        }
+        try {
+            val started = AppUpdateChecker.launchApkInstaller(context.applicationContext, ready.apkFile)
+            if (!started) {
+                showMessage("📲 कृपया 'Install unknown apps' अनुमति दें, फिर 'अभी इंस्टॉल करें' पर टैप करें")
+            }
+        } catch (_: Exception) {
+            showMessage("⚠️ इंस्टॉलर खुल नहीं सका, कृपया फिर से प्रयास करें")
         }
     }
 
