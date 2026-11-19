@@ -1,7 +1,6 @@
 package com.example.hajiri
 
 import android.content.Intent
-import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -37,7 +36,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.BlurredEdgeTreatment
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -62,8 +66,8 @@ import com.example.hajiri.model.WageMode
 import com.example.hajiri.ui.components.AddAdvanceDialog
 import com.example.hajiri.ui.components.AppUpdateDialog
 import com.example.hajiri.ui.components.CalendarDayDialog
+import com.example.hajiri.ui.components.LiquidGlassAmbientBackdrop
 import com.example.hajiri.ui.components.PreviousBalanceDialog
-import com.example.hajiri.ui.components.ConfirmActionDialog
 import com.example.hajiri.ui.components.PhoneProfileDialog
 import com.example.hajiri.ui.components.SalaryDialog
 import com.example.hajiri.ui.components.ThemePickerDialog
@@ -283,22 +287,8 @@ fun MainApp(
         }
     }
 
-    // Ethereal iPhone Liquid Glass Iridescent Ambient Background
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(
-                brush = Brush.verticalGradient(
-                    colors = listOf(
-                        palette.meshTopLeft.copy(alpha = if (palette.isDark) 0.92f else 0.72f),
-                        palette.background,
-                        palette.meshCenter.copy(alpha = if (palette.isDark) 0.85f else 0.58f),
-                        palette.meshTopRight.copy(alpha = if (palette.isDark) 0.80f else 0.55f),
-                        palette.meshBottom.copy(alpha = if (palette.isDark) 0.90f else 0.68f)
-                    )
-                )
-            )
-    ) {
+    // Ethereal iPhone Liquid Glass Iridescent Ambient Backdrop with Soft Blurred Orbs
+    LiquidGlassAmbientBackdrop {
         Scaffold(
             contentWindowInsets = WindowInsets.systemBars,
             containerColor = Color.Transparent,
@@ -474,17 +464,18 @@ fun FloatingLiquidDock(
             ),
         contentAlignment = Alignment.Center
     ) {
+        val dockShape = RoundedCornerShape(34.dp)
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
                 .shadow(
-                    elevation = 20.dp,
-                    shape = RoundedCornerShape(34.dp),
-                    ambientColor = Color(0x29000000),
-                    spotColor = palette.accent.copy(alpha = 0.28f)
+                    elevation = 22.dp,
+                    shape = dockShape,
+                    ambientColor = Color(0x33000000),
+                    spotColor = palette.accent.copy(alpha = 0.30f)
                 ),
-            shape = RoundedCornerShape(34.dp),
-            color = palette.glassCardHigh.copy(alpha = if (palette.isDark) 0.88f else 0.86f),
+            shape = dockShape,
+            color = palette.glassCardHigh.copy(alpha = if (palette.isDark) 0.78f else 0.76f),
             border = BorderStroke(
                 width = 1.4.dp,
                 brush = Brush.verticalGradient(
@@ -496,54 +487,82 @@ fun FloatingLiquidDock(
                 )
             )
         ) {
-            Row(
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(
-                        brush = Brush.verticalGradient(
-                            0.0f to palette.glassSheenTop,
-                            0.45f to Color.Transparent
+                    .clip(dockShape)
+                    .drawWithContent {
+                        drawContent()
+                        drawLine(
+                            brush = Brush.horizontalGradient(
+                                colors = listOf(
+                                    Color.Transparent,
+                                    Color.White.copy(alpha = if (palette.isDark) 0.36f else 0.90f),
+                                    Color.Transparent
+                                )
+                            ),
+                            start = Offset(size.width * 0.08f, 1.dp.toPx()),
+                            end = Offset(size.width * 0.92f, 1.dp.toPx()),
+                            strokeWidth = 1.2.dp.toPx()
                         )
-                    )
-                    .padding(horizontal = 10.dp, vertical = 7.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.CenterVertically
+                    }
             ) {
-                HajiriTab.entries.forEach { tab ->
-                    val isSelected = tab == selectedTab
-                    Surface(
-                        shape = RoundedCornerShape(22.dp),
-                        color = if (isSelected) palette.accent.copy(alpha = if (palette.isDark) 0.28f else 0.16f) else Color.Transparent,
-                        border = if (isSelected) {
-                            BorderStroke(
-                                1.2.dp,
-                                Brush.verticalGradient(
-                                    listOf(
-                                        palette.glassBorderTop,
-                                        palette.accent.copy(alpha = 0.48f)
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .blur(16.dp, edgeTreatment = BlurredEdgeTreatment.Unbounded)
+                        .background(
+                            brush = Brush.verticalGradient(
+                                0.0f to palette.glassSheenTop,
+                                0.55f to palette.glassSheenBottom,
+                                1.0f to Color.Transparent
+                            )
+                        )
+                )
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 10.dp, vertical = 7.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    HajiriTab.entries.forEach { tab ->
+                        val isSelected = tab == selectedTab
+                        Surface(
+                            shape = RoundedCornerShape(22.dp),
+                            color = if (isSelected) palette.accent.copy(alpha = if (palette.isDark) 0.30f else 0.16f) else Color.Transparent,
+                            border = if (isSelected) {
+                                BorderStroke(
+                                    1.25.dp,
+                                    Brush.verticalGradient(
+                                        listOf(
+                                            palette.glassBorderTop,
+                                            palette.accent.copy(alpha = 0.50f)
+                                        )
                                     )
                                 )
-                            )
-                        } else null,
-                        modifier = Modifier
-                            .weight(1f)
-                            .clickable { onTabSelected(tab) }
-                            .testTag("nav_tab_${tab.name.lowercase()}")
-                    ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 7.dp)
+                            } else null,
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable { onTabSelected(tab) }
+                                .testTag("nav_tab_${tab.name.lowercase()}")
                         ) {
-                            Text(
-                                text = tab.iconText,
-                                fontSize = 19.sp
-                            )
-                            Text(
-                                text = tab.label,
-                                fontSize = 11.sp,
-                                fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Bold,
-                                color = if (isSelected) palette.accent else palette.textSecondary
-                            )
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 7.dp)
+                            ) {
+                                Text(
+                                    text = tab.iconText,
+                                    fontSize = 19.sp
+                                )
+                                Text(
+                                    text = tab.label,
+                                    fontSize = 11.sp,
+                                    fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Bold,
+                                    color = if (isSelected) palette.accent else palette.textSecondary
+                                )
+                            }
                         }
                     }
                 }

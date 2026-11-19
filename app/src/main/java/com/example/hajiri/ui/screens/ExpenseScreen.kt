@@ -21,8 +21,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -58,6 +56,7 @@ import com.example.hajiri.model.ExpenseRecord
 import com.example.hajiri.ui.components.ConfirmActionDialog
 import com.example.hajiri.ui.components.GlassCard
 import com.example.hajiri.ui.components.LiquidGlassButton
+import com.example.hajiri.ui.components.LiquidGlassDialogCard
 import com.example.hajiri.ui.components.LiquidGlassOutlinedButton
 import com.example.hajiri.ui.components.MonthYearPickerDialog
 import com.example.hajiri.ui.components.outlinedFieldColors
@@ -841,16 +840,9 @@ private fun EditExpenseDialog(
     }
 
     Dialog(onDismissRequest = onDismiss) {
-        Card(
-            shape = RoundedCornerShape(28.dp),
-            colors = CardDefaults.cardColors(containerColor = palette.glassCardHigh),
-            border = BorderStroke(1.2.dp, palette.glassBorderTop),
-            modifier = Modifier.shadow(16.dp, RoundedCornerShape(28.dp), spotColor = Color(0x24312E81))
-        ) {
+        LiquidGlassDialogCard(contentPadding = 22.dp) {
             Column(
-                modifier = Modifier
-                    .padding(22.dp)
-                    .fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Text(

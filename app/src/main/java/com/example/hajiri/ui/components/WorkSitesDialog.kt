@@ -16,11 +16,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -91,17 +86,8 @@ fun WorkSitesDialog(
     }
 
     Dialog(onDismissRequest = onDismiss) {
-        Card(
-            shape = RoundedCornerShape(28.dp),
-            colors = CardDefaults.cardColors(containerColor = palette.glassCardHigh),
-            border = BorderStroke(1.2.dp, palette.glassBorderTop),
-            modifier = Modifier.shadow(16.dp, RoundedCornerShape(28.dp), spotColor = Color(0x24312E81))
-        ) {
-            Column(
-                modifier = Modifier
-                    .padding(22.dp)
-                    .fillMaxWidth()
-            ) {
+        LiquidGlassDialogCard(contentPadding = 22.dp) {
+            Column(modifier = Modifier.fillMaxWidth()) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -239,13 +225,15 @@ fun WorkSitesDialog(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.End
                     ) {
-                        Button(
+                        LiquidGlassButton(
                             onClick = onDismiss,
-                            colors = ButtonDefaults.buttonColors(containerColor = palette.accent),
+                            containerColor = palette.accent,
+                            secondaryColor = palette.accentSecondary,
                             shape = RoundedCornerShape(14.dp),
+                            minHeight = 44.dp,
                             modifier = Modifier.testTag("close_sites_dialog_btn")
                         ) {
-                            Text("ठीक है", color = Color.White, fontWeight = FontWeight.Bold)
+                            Text("ठीक है", color = Color.White, fontWeight = FontWeight.ExtraBold)
                         }
                     }
                 } else {
@@ -354,15 +342,16 @@ fun WorkSitesDialog(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.End
                     ) {
-                        OutlinedButton(
+                        LiquidGlassOutlinedButton(
                             onClick = { showForm = false },
                             shape = RoundedCornerShape(14.dp),
-                            border = BorderStroke(1.dp, palette.fieldUnfocusedBorder)
+                            borderColor = palette.fieldUnfocusedBorder,
+                            minHeight = 44.dp
                         ) {
-                            Text("वापस", color = palette.textSecondary, fontWeight = FontWeight.SemiBold)
+                            Text("वापस", color = palette.textPrimary, fontWeight = FontWeight.Bold)
                         }
                         Spacer(modifier = Modifier.width(12.dp))
-                        Button(
+                        LiquidGlassButton(
                             onClick = {
                                 val finalId = editingSiteId ?: "site_${UUID.randomUUID().toString().take(8)}"
                                 val site = WorkSite(
@@ -377,11 +366,13 @@ fun WorkSitesDialog(
                                 onSaveSite(site)
                                 showForm = false
                             },
-                            colors = ButtonDefaults.buttonColors(containerColor = palette.accent),
+                            containerColor = palette.accent,
+                            secondaryColor = palette.accentSecondary,
                             shape = RoundedCornerShape(14.dp),
+                            minHeight = 44.dp,
                             modifier = Modifier.testTag("save_site_btn")
                         ) {
-                            Text("💾 सेव करें", color = Color.White, fontWeight = FontWeight.Bold)
+                            Text("💾 सेव करें", color = Color.White, fontWeight = FontWeight.ExtraBold)
                         }
                     }
                 }

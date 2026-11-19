@@ -13,11 +13,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -175,17 +170,8 @@ fun MonthYearPickerDialog(
     var selectedMonthValue by remember(initialYm) { mutableIntStateOf(initialYm.monthValue) }
 
     Dialog(onDismissRequest = onDismiss) {
-        Card(
-            shape = RoundedCornerShape(28.dp),
-            colors = CardDefaults.cardColors(containerColor = palette.glassCardHigh),
-            border = BorderStroke(1.2.dp, palette.glassBorderTop),
-            modifier = Modifier.shadow(16.dp, RoundedCornerShape(28.dp), spotColor = Color(0x24312E81))
-        ) {
-            Column(
-                modifier = Modifier
-                    .padding(22.dp)
-                    .fillMaxWidth()
-            ) {
+        LiquidGlassDialogCard(contentPadding = 22.dp) {
+            Column(modifier = Modifier.fillMaxWidth()) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -343,24 +329,27 @@ fun MonthYearPickerDialog(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End
                 ) {
-                    OutlinedButton(
+                    LiquidGlassOutlinedButton(
                         onClick = onDismiss,
                         shape = RoundedCornerShape(14.dp),
-                        border = BorderStroke(1.dp, palette.fieldUnfocusedBorder)
+                        borderColor = palette.fieldUnfocusedBorder,
+                        minHeight = 44.dp
                     ) {
-                        Text("रद्द करें", color = palette.textSecondary, fontWeight = FontWeight.SemiBold)
+                        Text("रद्द करें", color = palette.textPrimary, fontWeight = FontWeight.Bold)
                     }
                     Spacer(modifier = Modifier.height(0.dp).padding(horizontal = 6.dp))
-                    Button(
+                    LiquidGlassButton(
                         onClick = { onMonthSelected(safePreviewYm.toString()) },
-                        colors = ButtonDefaults.buttonColors(containerColor = palette.accent),
+                        containerColor = palette.accent,
+                        secondaryColor = palette.accentSecondary,
                         shape = RoundedCornerShape(14.dp),
+                        minHeight = 44.dp,
                         modifier = Modifier.testTag("picker_confirm_btn")
                     ) {
                         Text(
                             text = "${DateUtils.formatHindiMonthYear(safePreviewYm)} देखें ✓",
                             color = Color.White,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.ExtraBold
                         )
                     }
                 }

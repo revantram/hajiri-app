@@ -21,8 +21,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -48,12 +46,10 @@ import androidx.credentials.CredentialManager
 import com.example.hajiri.data.attemptAutoSignIn
 import com.example.hajiri.data.onGoogleSignInClicked
 import com.example.hajiri.ui.components.GlassCard
+import com.example.hajiri.ui.components.LiquidGlassAmbientBackdrop
+import com.example.hajiri.ui.components.LiquidGlassButton
 import com.example.hajiri.ui.theme.AccentIndigo
-import com.example.hajiri.ui.theme.LightBackground
-import com.example.hajiri.ui.theme.LiquidMeshBottom
-import com.example.hajiri.ui.theme.LiquidMeshCenter
-import com.example.hajiri.ui.theme.LiquidMeshTopLeft
-import com.example.hajiri.ui.theme.LiquidMeshTopRight
+import com.example.hajiri.ui.theme.AccentPurple
 import com.example.hajiri.ui.theme.StatusGreen
 import com.example.hajiri.ui.theme.StatusGreenBg
 import com.example.hajiri.ui.theme.StatusRed
@@ -89,30 +85,20 @@ fun AuthScreen(
         )
     }
 
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .background(
-                brush = Brush.verticalGradient(
-                    colors = listOf(
-                        LightBackground,
-                        LiquidMeshTopLeft.copy(alpha = 0.55f),
-                        LiquidMeshCenter.copy(alpha = 0.45f),
-                        LiquidMeshTopRight.copy(alpha = 0.45f),
-                        LiquidMeshBottom.copy(alpha = 0.55f)
-                    )
-                )
-            )
-            .windowInsetsPadding(WindowInsets.systemBars)
-            .padding(20.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        GlassCard(
+    LiquidGlassAmbientBackdrop(modifier = modifier) {
+        Box(
             modifier = Modifier
-                .widthIn(max = 520.dp)
-                .verticalScroll(rememberScrollState()),
-            contentPadding = 26.dp
+                .fillMaxSize()
+                .windowInsetsPadding(WindowInsets.systemBars)
+                .padding(20.dp),
+            contentAlignment = Alignment.Center
         ) {
+            GlassCard(
+                modifier = Modifier
+                    .widthIn(max = 520.dp)
+                    .verticalScroll(rememberScrollState()),
+                contentPadding = 26.dp
+            ) {
             Column(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalAlignment = Alignment.CenterHorizontally
@@ -201,7 +187,7 @@ fun AuthScreen(
                     }
                 }
 
-                Button(
+                LiquidGlassButton(
                     onClick = {
                         errorMessage = null
                         isSigningIn = true
@@ -223,11 +209,12 @@ fun AuthScreen(
                         )
                     },
                     enabled = !isSigningIn && !isCheckingSilent,
-                    colors = ButtonDefaults.buttonColors(containerColor = AccentIndigo),
-                    shape = RoundedCornerShape(16.dp),
+                    containerColor = AccentIndigo,
+                    secondaryColor = AccentPurple,
+                    shape = RoundedCornerShape(18.dp),
+                    minHeight = 54.dp,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(54.dp)
                         .testTag("google_sign_in_btn")
                 ) {
                     if (isSigningIn || isCheckingSilent) {
@@ -266,12 +253,13 @@ fun AuthScreen(
                                 text = "Google से साइन इन करें",
                                 color = Color.White,
                                 fontSize = 16.sp,
-                                fontWeight = FontWeight.Bold
+                                fontWeight = FontWeight.ExtraBold
                             )
                         }
                     }
                 }
             }
+        }
         }
     }
 }

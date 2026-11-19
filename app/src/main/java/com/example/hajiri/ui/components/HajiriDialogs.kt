@@ -16,11 +16,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
@@ -96,16 +91,9 @@ fun SalaryDialog(
     var otRateText by remember { mutableStateOf(if (initialOtRate > 0) initialOtRate.toLong().toString() else "50") }
 
     Dialog(onDismissRequest = onDismiss) {
-        Card(
-            shape = RoundedCornerShape(28.dp),
-            colors = CardDefaults.cardColors(containerColor = palette.glassCardHigh),
-            border = BorderStroke(1.2.dp, palette.glassBorderTop),
-            modifier = Modifier.shadow(16.dp, RoundedCornerShape(28.dp), spotColor = Color(0x24312E81))
-        ) {
+        LiquidGlassDialogCard(contentPadding = 24.dp) {
             Column(
-                modifier = Modifier
-                    .padding(24.dp)
-                    .fillMaxWidth()
+                modifier = Modifier.fillMaxWidth()
             ) {
                 Text(
                     text = "💰 वेतन / मजदूरी सेटिंग",
@@ -199,26 +187,29 @@ fun SalaryDialog(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End
                 ) {
-                    OutlinedButton(
+                    LiquidGlassOutlinedButton(
                         onClick = onDismiss,
                         shape = RoundedCornerShape(14.dp),
-                        border = BorderStroke(1.dp, palette.fieldUnfocusedBorder)
+                        borderColor = palette.fieldUnfocusedBorder,
+                        minHeight = 44.dp
                     ) {
-                        Text("रद्द करें", color = palette.textSecondary, fontWeight = FontWeight.SemiBold)
+                        Text("रद्द करें", color = palette.textPrimary, fontWeight = FontWeight.Bold)
                     }
                     Spacer(modifier = Modifier.width(12.dp))
-                    Button(
+                    LiquidGlassButton(
                         onClick = {
                             val sal = salaryText.toDoubleOrNull() ?: 0.0
                             val daily = dailyWageText.toDoubleOrNull() ?: 0.0
                             val otr = otRateText.toDoubleOrNull() ?: 50.0
                             onSave(sal, daily, selectedMode, otr)
                         },
-                        colors = ButtonDefaults.buttonColors(containerColor = palette.accent),
+                        containerColor = palette.accent,
+                        secondaryColor = palette.accentSecondary,
                         shape = RoundedCornerShape(14.dp),
+                        minHeight = 44.dp,
                         modifier = Modifier.testTag("save_salary_button")
                     ) {
-                        Text("💾 सेव करें", color = Color.White, fontWeight = FontWeight.Bold)
+                        Text("💾 सेव करें", color = Color.White, fontWeight = FontWeight.ExtraBold)
                     }
                 }
             }
@@ -263,15 +254,9 @@ fun CalendarDayDialog(
     }
 
     Dialog(onDismissRequest = onDismiss) {
-        Card(
-            shape = RoundedCornerShape(28.dp),
-            colors = CardDefaults.cardColors(containerColor = palette.glassCardHigh),
-            border = BorderStroke(1.2.dp, palette.glassBorderTop),
-            modifier = Modifier.shadow(16.dp, RoundedCornerShape(28.dp), spotColor = Color(0x24312E81))
-        ) {
+        LiquidGlassDialogCard(contentPadding = 22.dp) {
             Column(
                 modifier = Modifier
-                    .padding(22.dp)
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState())
             ) {
@@ -470,22 +455,25 @@ fun CalendarDayDialog(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End
                 ) {
-                    OutlinedButton(
+                    LiquidGlassOutlinedButton(
                         onClick = onDismiss,
                         shape = RoundedCornerShape(14.dp),
-                        border = BorderStroke(1.dp, palette.fieldUnfocusedBorder)
+                        borderColor = palette.fieldUnfocusedBorder,
+                        minHeight = 44.dp
                     ) {
-                        Text("रद्द करें", color = palette.textSecondary, fontWeight = FontWeight.SemiBold)
+                        Text("रद्द करें", color = palette.textPrimary, fontWeight = FontWeight.Bold)
                     }
                     Spacer(modifier = Modifier.width(12.dp))
-                    Button(
+                    LiquidGlassButton(
                         onClick = { onSave(selectedStatus, noteText, otVal) },
                         enabled = selectedStatus != null || noteText.isNotBlank() || hasExistingRecord || otChanged || otVal > 0f,
-                        colors = ButtonDefaults.buttonColors(containerColor = palette.accent),
+                        containerColor = palette.accent,
+                        secondaryColor = palette.accentSecondary,
                         shape = RoundedCornerShape(14.dp),
+                        minHeight = 44.dp,
                         modifier = Modifier.testTag("calendar_popup_save_btn")
                     ) {
-                        Text("💾 सेव करें", color = Color.White, fontWeight = FontWeight.Bold)
+                        Text("💾 सेव करें", color = Color.White, fontWeight = FontWeight.ExtraBold)
                     }
                 }
             }
@@ -553,16 +541,9 @@ fun ThemePickerDialog(
 ) {
     val palette = LocalHajiriPalette.current
     Dialog(onDismissRequest = onDismiss) {
-        Card(
-            shape = RoundedCornerShape(28.dp),
-            colors = CardDefaults.cardColors(containerColor = palette.glassCardHigh),
-            border = BorderStroke(1.2.dp, palette.glassBorderTop),
-            modifier = Modifier.shadow(16.dp, RoundedCornerShape(28.dp), spotColor = Color(0x24312E81))
-        ) {
+        LiquidGlassDialogCard(contentPadding = 24.dp) {
             Column(
-                modifier = Modifier
-                    .padding(24.dp)
-                    .fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Text(
@@ -646,12 +627,13 @@ fun ThemePickerDialog(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End
                 ) {
-                    OutlinedButton(
+                    LiquidGlassOutlinedButton(
                         onClick = onDismiss,
                         shape = RoundedCornerShape(14.dp),
-                        border = BorderStroke(1.dp, palette.fieldUnfocusedBorder)
+                        borderColor = palette.fieldUnfocusedBorder,
+                        minHeight = 44.dp
                     ) {
-                        Text("बंद करें", color = palette.textSecondary, fontWeight = FontWeight.SemiBold)
+                        Text("बंद करें", color = palette.textPrimary, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -673,17 +655,8 @@ fun WorkDaysDialog(
     }
 
     Dialog(onDismissRequest = onDismiss) {
-        Card(
-            shape = RoundedCornerShape(28.dp),
-            colors = CardDefaults.cardColors(containerColor = palette.glassCardHigh),
-            border = BorderStroke(1.2.dp, palette.glassBorderTop),
-            modifier = Modifier.shadow(16.dp, RoundedCornerShape(28.dp), spotColor = Color(0x24312E81))
-        ) {
-            Column(
-                modifier = Modifier
-                    .padding(24.dp)
-                    .fillMaxWidth()
-            ) {
+        LiquidGlassDialogCard(contentPadding = 24.dp) {
+            Column(modifier = Modifier.fillMaxWidth()) {
                 Text(
                     text = "📅 कार्यदिवस सेटिंग",
                     fontSize = 20.sp,
@@ -750,15 +723,16 @@ fun WorkDaysDialog(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End
                 ) {
-                    OutlinedButton(
+                    LiquidGlassOutlinedButton(
                         onClick = onDismiss,
                         shape = RoundedCornerShape(14.dp),
-                        border = BorderStroke(1.dp, palette.fieldUnfocusedBorder)
+                        borderColor = palette.fieldUnfocusedBorder,
+                        minHeight = 44.dp
                     ) {
-                        Text("रद्द करें", color = palette.textSecondary, fontWeight = FontWeight.SemiBold)
+                        Text("रद्द करें", color = palette.textPrimary, fontWeight = FontWeight.Bold)
                     }
                     Spacer(modifier = Modifier.width(12.dp))
-                    Button(
+                    LiquidGlassButton(
                         onClick = {
                             val custom = text.toIntOrNull()
                             if (isAutoMode || custom == null) {
@@ -767,11 +741,13 @@ fun WorkDaysDialog(
                                 onSave(custom.coerceIn(1, 31))
                             }
                         },
-                        colors = ButtonDefaults.buttonColors(containerColor = palette.accent),
+                        containerColor = palette.accent,
+                        secondaryColor = palette.accentSecondary,
                         shape = RoundedCornerShape(14.dp),
+                        minHeight = 44.dp,
                         modifier = Modifier.testTag("save_workdays_button")
                     ) {
-                        Text("💾 सेव करें", color = Color.White, fontWeight = FontWeight.Bold)
+                        Text("💾 सेव करें", color = Color.White, fontWeight = FontWeight.ExtraBold)
                     }
                 }
             }
@@ -831,17 +807,8 @@ fun AddAdvanceDialog(
     }
 
     Dialog(onDismissRequest = onDismiss) {
-        Card(
-            shape = RoundedCornerShape(28.dp),
-            colors = CardDefaults.cardColors(containerColor = palette.glassCardHigh),
-            border = BorderStroke(1.2.dp, palette.glassBorderTop),
-            modifier = Modifier.shadow(16.dp, RoundedCornerShape(28.dp), spotColor = Color(0x24312E81))
-        ) {
-            Column(
-                modifier = Modifier
-                    .padding(24.dp)
-                    .fillMaxWidth()
-            ) {
+        LiquidGlassDialogCard(contentPadding = 24.dp) {
+            Column(modifier = Modifier.fillMaxWidth()) {
                 Text(
                     text = "💳 एडवांस / उधार जोड़ें",
                     fontSize = 20.sp,
@@ -922,26 +889,29 @@ fun AddAdvanceDialog(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End
                 ) {
-                    OutlinedButton(
+                    LiquidGlassOutlinedButton(
                         onClick = onDismiss,
                         shape = RoundedCornerShape(14.dp),
-                        border = BorderStroke(1.dp, palette.fieldUnfocusedBorder)
+                        borderColor = palette.fieldUnfocusedBorder,
+                        minHeight = 44.dp
                     ) {
-                        Text("रद्द करें", color = palette.textSecondary, fontWeight = FontWeight.SemiBold)
+                        Text("रद्द करें", color = palette.textPrimary, fontWeight = FontWeight.Bold)
                     }
                     Spacer(modifier = Modifier.width(12.dp))
-                    Button(
+                    LiquidGlassButton(
                         onClick = {
                             val amt = amountText.toDoubleOrNull() ?: 0.0
                             if (amt > 0.0) {
                                 onSave(amt, reasonText.ifBlank { "एडवांस" }, selectedDateKey)
                             }
                         },
-                        colors = ButtonDefaults.buttonColors(containerColor = palette.accent),
+                        containerColor = palette.accent,
+                        secondaryColor = palette.accentSecondary,
                         shape = RoundedCornerShape(14.dp),
+                        minHeight = 44.dp,
                         modifier = Modifier.testTag("save_advance_button")
                     ) {
-                        Text("💾 जोड़ें", color = Color.White, fontWeight = FontWeight.Bold)
+                        Text("💾 जोड़ें", color = Color.White, fontWeight = FontWeight.ExtraBold)
                     }
                 }
             }
@@ -959,21 +929,12 @@ fun ConfirmActionDialog(
 ) {
     val palette = LocalHajiriPalette.current
     Dialog(onDismissRequest = onDismiss) {
-        Card(
-            shape = RoundedCornerShape(28.dp),
-            colors = CardDefaults.cardColors(containerColor = palette.glassCardHigh),
-            border = BorderStroke(1.2.dp, palette.glassBorderTop),
-            modifier = Modifier.shadow(16.dp, RoundedCornerShape(28.dp), spotColor = Color(0x24312E81))
-        ) {
-            Column(
-                modifier = Modifier
-                    .padding(24.dp)
-                    .fillMaxWidth()
-            ) {
+        LiquidGlassDialogCard(contentPadding = 24.dp) {
+            Column(modifier = Modifier.fillMaxWidth()) {
                 Text(
                     text = title,
                     fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
+                    fontWeight = FontWeight.ExtraBold,
                     color = palette.textPrimary
                 )
                 Spacer(modifier = Modifier.height(12.dp))
@@ -988,21 +949,24 @@ fun ConfirmActionDialog(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End
                 ) {
-                    OutlinedButton(
+                    LiquidGlassOutlinedButton(
                         onClick = onDismiss,
                         shape = RoundedCornerShape(14.dp),
-                        border = BorderStroke(1.dp, palette.fieldUnfocusedBorder)
+                        borderColor = palette.fieldUnfocusedBorder,
+                        minHeight = 44.dp
                     ) {
-                        Text("रद्द करें", color = palette.textSecondary, fontWeight = FontWeight.SemiBold)
+                        Text("रद्द करें", color = palette.textPrimary, fontWeight = FontWeight.Bold)
                     }
                     Spacer(modifier = Modifier.width(12.dp))
-                    Button(
+                    LiquidGlassButton(
                         onClick = onConfirm,
-                        colors = ButtonDefaults.buttonColors(containerColor = StatusRed),
+                        containerColor = StatusRed,
+                        secondaryColor = Color(0xFF9F1239),
                         shape = RoundedCornerShape(14.dp),
+                        minHeight = 44.dp,
                         modifier = Modifier.testTag("confirm_delete_button")
                     ) {
-                        Text(confirmText, color = Color.White, fontWeight = FontWeight.Bold)
+                        Text(confirmText, color = Color.White, fontWeight = FontWeight.ExtraBold)
                     }
                 }
             }
@@ -1038,21 +1002,12 @@ fun PhoneProfileDialog(
     var phoneText by remember { mutableStateOf(initialPhone) }
 
     Dialog(onDismissRequest = onDismiss) {
-        Card(
-            shape = RoundedCornerShape(28.dp),
-            colors = CardDefaults.cardColors(containerColor = palette.glassCardHigh),
-            border = BorderStroke(1.2.dp, palette.glassBorderTop),
-            modifier = Modifier.shadow(16.dp, RoundedCornerShape(28.dp), spotColor = Color(0x24312E81))
-        ) {
-            Column(
-                modifier = Modifier
-                    .padding(24.dp)
-                    .fillMaxWidth()
-            ) {
+        LiquidGlassDialogCard(contentPadding = 24.dp) {
+            Column(modifier = Modifier.fillMaxWidth()) {
                 Text(
                     text = "👤 प्रोफ़ाइल और मोबाइल नंबर",
                     fontSize = 19.sp,
-                    fontWeight = FontWeight.Bold,
+                    fontWeight = FontWeight.ExtraBold,
                     color = palette.textPrimary
                 )
                 Spacer(modifier = Modifier.height(16.dp))
@@ -1088,21 +1043,24 @@ fun PhoneProfileDialog(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End
                 ) {
-                    OutlinedButton(
+                    LiquidGlassOutlinedButton(
                         onClick = onDismiss,
                         shape = RoundedCornerShape(14.dp),
-                        border = BorderStroke(1.dp, palette.fieldUnfocusedBorder)
+                        borderColor = palette.fieldUnfocusedBorder,
+                        minHeight = 44.dp
                     ) {
-                        Text("रद्द करें", color = palette.textSecondary, fontWeight = FontWeight.SemiBold)
+                        Text("रद्द करें", color = palette.textPrimary, fontWeight = FontWeight.Bold)
                     }
                     Spacer(modifier = Modifier.width(12.dp))
-                    Button(
+                    LiquidGlassButton(
                         onClick = { onSave(nameText, phoneText) },
-                        colors = ButtonDefaults.buttonColors(containerColor = palette.accent),
+                        containerColor = palette.accent,
+                        secondaryColor = palette.accentSecondary,
                         shape = RoundedCornerShape(14.dp),
+                        minHeight = 44.dp,
                         modifier = Modifier.testTag("save_profile_button")
                     ) {
-                        Text("💾 सेव करें", color = Color.White, fontWeight = FontWeight.Bold)
+                        Text("💾 सेव करें", color = Color.White, fontWeight = FontWeight.ExtraBold)
                     }
                 }
             }
@@ -1130,17 +1088,8 @@ fun AppUpdateDialog(
     var repoInput by remember(repoSlug) { mutableStateOf(repoSlug) }
 
     Dialog(onDismissRequest = onDismiss) {
-        Card(
-            shape = RoundedCornerShape(28.dp),
-            colors = CardDefaults.cardColors(containerColor = palette.glassCardHigh),
-            border = BorderStroke(1.3.dp, palette.glassBorderTop),
-            modifier = Modifier.shadow(18.dp, RoundedCornerShape(28.dp), spotColor = Color(0x2E0F172A))
-        ) {
-            Column(
-                modifier = Modifier
-                    .padding(22.dp)
-                    .fillMaxWidth()
-            ) {
+        LiquidGlassDialogCard(contentPadding = 22.dp) {
+            Column(modifier = Modifier.fillMaxWidth()) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -1495,17 +1444,8 @@ fun PreviousBalanceDialog(
     var partialInputText by remember { mutableStateOf("") }
 
     Dialog(onDismissRequest = onDismiss) {
-        Card(
-            shape = RoundedCornerShape(28.dp),
-            colors = CardDefaults.cardColors(containerColor = palette.glassCardHigh),
-            border = BorderStroke(1.2.dp, palette.glassBorderTop),
-            modifier = Modifier.shadow(16.dp, RoundedCornerShape(28.dp), spotColor = Color(0x24312E81))
-        ) {
-            Column(
-                modifier = Modifier
-                    .padding(22.dp)
-                    .fillMaxWidth()
-            ) {
+        LiquidGlassDialogCard(contentPadding = 22.dp) {
+            Column(modifier = Modifier.fillMaxWidth()) {
                 Text(
                     text = "💼 पिछले महीने के बाकी",
                     fontSize = 20.sp,
@@ -1728,17 +1668,19 @@ fun PreviousBalanceDialog(
                                                     .weight(1f)
                                                     .testTag("partial_paid_input_${item.monthKey}")
                                             )
-                                            Button(
+                                            LiquidGlassButton(
                                                 onClick = {
                                                     val paidVal = partialInputText.toDoubleOrNull() ?: 0.0
                                                     onPartialPayment(item.monthKey, paidVal)
                                                     editingMonthKey = null
                                                 },
-                                                colors = ButtonDefaults.buttonColors(containerColor = palette.accent),
+                                                containerColor = palette.accent,
+                                                secondaryColor = palette.accentSecondary,
                                                 shape = RoundedCornerShape(12.dp),
+                                                minHeight = 44.dp,
                                                 modifier = Modifier.testTag("partial_paid_save_${item.monthKey}")
                                             ) {
-                                                Text("सेव ✓", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                                Text("सेव ✓", color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 12.sp)
                                             }
                                         }
                                     }
@@ -1760,13 +1702,15 @@ fun PreviousBalanceDialog(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End
                 ) {
-                    Button(
+                    LiquidGlassButton(
                         onClick = onDismiss,
-                        colors = ButtonDefaults.buttonColors(containerColor = palette.accent),
+                        containerColor = palette.accent,
+                        secondaryColor = palette.accentSecondary,
                         shape = RoundedCornerShape(14.dp),
+                        minHeight = 44.dp,
                         modifier = Modifier.testTag("close_prev_balance_dialog_btn")
                     ) {
-                        Text("ठीक है", color = Color.White, fontWeight = FontWeight.Bold)
+                        Text("ठीक है", color = Color.White, fontWeight = FontWeight.ExtraBold)
                     }
                 }
             }
