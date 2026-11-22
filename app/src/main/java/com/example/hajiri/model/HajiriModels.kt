@@ -34,7 +34,8 @@ enum class AppThemeStyle(val id: String, val labelHindi: String, val emoji: Stri
     LIQUID_LIGHT("liquid_light", "लिक्विड लाइट", "🤍"),
     OCEAN_GLASS("ocean_glass", "ओशन ब्लू", "🌊"),
     ROSE_GOLD("rose_gold", "रोज़ गोल्ड", "🌸"),
-    LIQUID_DARK("liquid_dark", "लिक्विड डार्क", "🌙");
+    LIQUID_DARK("liquid_dark", "लिक्विड डार्क", "🌙"),
+    OLED_BLACK("oled_black", "OLED Black", "🖤");
 
     companion object {
         fun fromId(id: String?): AppThemeStyle {

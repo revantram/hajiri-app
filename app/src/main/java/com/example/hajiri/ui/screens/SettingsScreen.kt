@@ -73,6 +73,7 @@ import com.example.hajiri.widget.HajiriWidgetManager
 fun SettingsScreen(
     viewModel: HajiriViewModel,
     googleEmail: String,
+    activeTheme: AppThemeStyle = AppThemeStyle.LIQUID_LIGHT,
     onSignOut: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -92,7 +93,6 @@ fun SettingsScreen(
     val sitesList = viewModel.resolveSitesList(settings)
     val activeSite = viewModel.getActiveSite(settings)
     val activeWageMode = WageMode.fromId(activeSite.wageMode)
-    val activeTheme = AppThemeStyle.fromId(settings.themeStyle)
 
     var notificationsAllowed by remember {
         mutableStateOf(DailyReminderScheduler.areNotificationsEnabled(context))
@@ -218,9 +218,9 @@ fun SettingsScreen(
                     }
 
                     val (badgeBg, badgeColor) = when (syncStatus) {
-                        SyncStatus.OFFLINE_SAVED -> com.example.hajiri.ui.theme.OtOrangeBg to com.example.hajiri.ui.theme.OtOrange
-                        SyncStatus.SYNCING_PENDING -> palette.accent.copy(alpha = 0.14f) to palette.accent
-                        SyncStatus.SYNCED -> StatusGreenBg to StatusGreen
+                        SyncStatus.OFFLINE_SAVED -> palette.otAmberBg to palette.otAmber
+                        SyncStatus.SYNCING_PENDING -> palette.accent.copy(alpha = 0.15f) to palette.accent
+                        SyncStatus.SYNCED -> palette.statusGreenBg to palette.statusGreen
                     }
                     Surface(
                         shape = RoundedCornerShape(50),
@@ -279,7 +279,7 @@ fun SettingsScreen(
 
                     LiquidGlassOutlinedButton(
                         onClick = onSignOut,
-                        borderColor = StatusRed.copy(alpha = 0.45f),
+                        borderColor = palette.statusRed.copy(alpha = 0.45f),
                         shape = RoundedCornerShape(14.dp),
                         modifier = Modifier
                             .weight(1f)
@@ -289,7 +289,7 @@ fun SettingsScreen(
                             text = "🚪 लॉगआउट",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.ExtraBold,
-                            color = StatusRed
+                            color = palette.statusRed
                         )
                     }
                 }
@@ -367,7 +367,7 @@ fun SettingsScreen(
                 val isAutoWorkDays = activeSite.workDays !in 1..31 || activeSite.workDays == 26
                 SettingsOptionRow(
                     iconText = "📅",
-                    iconBg = StatusGreenBg,
+                    iconBg = palette.statusGreenBg,
                     title = "काम के दिन",
                     subtitle = if (isAutoWorkDays) {
                         "महीने के पूरे दिन (28/29/30/31) अपने आप"
@@ -383,9 +383,9 @@ fun SettingsScreen(
 
                 SettingsOptionRow(
                     iconText = "🎨",
-                    iconBg = OtOrangeBg,
+                    iconBg = palette.otAmberBg,
                     title = "ऐप थीम",
-                    subtitle = "लाइट, ओशन ब्लू, रोज़ गोल्ड, डार्क",
+                    subtitle = "लाइट, ओशन ब्लू, रोज़ गोल्ड, डार्क, OLED Black",
                     valueText = "${activeTheme.emoji} ${activeTheme.labelHindi}",
                     onClick = { viewModel.showThemeDialog.value = true },
                     modifier = Modifier.testTag("open_theme_settings_btn")
@@ -395,7 +395,7 @@ fun SettingsScreen(
 
                 SettingsOptionRow(
                     iconText = "☁️",
-                    iconBg = AdvancePinkBg,
+                    iconBg = palette.expenseRedBg,
                     title = "प्रोफ़ाइल व मोबाइल नंबर",
                     subtitle = currentUser?.phone?.ifBlank { "मोबाइल नंबर जोड़ें" } ?: "मोबाइल नंबर जोड़ें",
                     valueText = "एडिट",
@@ -419,7 +419,7 @@ fun SettingsScreen(
 
                 SettingsOptionRow(
                     iconText = "💼",
-                    iconBg = OtOrangeBg,
+                    iconBg = palette.otAmberBg,
                     title = "पिछले महीने के बाकी",
                     subtitle = "बकाया या आंशिक भुगतान (Partial Paid) दर्ज करें",
                     valueText = "देखें",
@@ -431,7 +431,7 @@ fun SettingsScreen(
 
                 SettingsOptionRow(
                     iconText = "🧩",
-                    iconBg = StatusGreenBg,
+                    iconBg = palette.statusGreenBg,
                     title = "होम स्क्रीन विजेट जोड़ें",
                     subtitle = "ऐप खोले बिना 1-टैप में P / A / HD लगाएं",
                     valueText = "पिन करें",
@@ -518,8 +518,8 @@ fun SettingsScreen(
                 if ((reminderEnabled || notificationPermissionDeniedRecently) && !notificationsAllowed) {
                     Surface(
                         shape = RoundedCornerShape(10.dp),
-                        color = StatusRedBg,
-                        border = BorderStroke(1.dp, StatusRed.copy(alpha = 0.28f)),
+                        color = palette.statusRedBg,
+                        border = BorderStroke(1.dp, palette.statusRed.copy(alpha = 0.28f)),
                         modifier = Modifier
                             .fillMaxWidth()
                             .testTag("reminder_notification_permission_banner")
@@ -534,7 +534,7 @@ fun SettingsScreen(
                             Text(
                                 text = "⚠️ नोटिफिकेशन अनुमति बंद है — रिमाइंडर के लिए चालू करें",
                                 fontSize = 11.sp,
-                                color = StatusRed,
+                                color = palette.statusRed,
                                 fontWeight = FontWeight.Medium,
                                 modifier = Modifier
                                     .weight(1f)
@@ -542,7 +542,7 @@ fun SettingsScreen(
                             )
                             Surface(
                                 shape = RoundedCornerShape(8.dp),
-                                color = StatusRed,
+                                color = palette.statusRed,
                                 modifier = Modifier
                                     .clickable {
                                         try {
@@ -568,8 +568,8 @@ fun SettingsScreen(
                 } else if (reminderEnabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !exactAlarmAllowed) {
                     Surface(
                         shape = RoundedCornerShape(10.dp),
-                        color = OtOrangeBg,
-                        border = BorderStroke(1.dp, OtOrange.copy(alpha = 0.30f)),
+                        color = palette.otAmberBg,
+                        border = BorderStroke(1.dp, palette.otAmber.copy(alpha = 0.30f)),
                         modifier = Modifier
                             .fillMaxWidth()
                             .testTag("reminder_exact_alarm_banner")
@@ -584,7 +584,7 @@ fun SettingsScreen(
                             Text(
                                 text = "⏰ सटीक समय के लिए अलार्म अनुमति दें (अभी सामान्य रिमाइंडर सक्रिय है)",
                                 fontSize = 11.sp,
-                                color = OtOrange,
+                                color = palette.otAmber,
                                 fontWeight = FontWeight.Medium,
                                 modifier = Modifier
                                     .weight(1f)
@@ -592,7 +592,7 @@ fun SettingsScreen(
                             )
                             Surface(
                                 shape = RoundedCornerShape(8.dp),
-                                color = OtOrange,
+                                color = palette.otAmber,
                                 modifier = Modifier
                                     .clickable {
                                         try {
@@ -621,7 +621,7 @@ fun SettingsScreen(
                         text = "✓ सक्रिय: रोज़ $activeTimeLabel (आज की हाजिरी बाकी होने पर)",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = StatusGreen,
+                        color = palette.statusGreen,
                         modifier = Modifier.testTag("reminder_active_status_text")
                     )
                 }
@@ -727,7 +727,7 @@ fun SettingsScreen(
                                         text = "✕ रद्द करें",
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.ExtraBold,
-                                        color = StatusRed,
+                                        color = palette.statusRed,
                                         modifier = Modifier
                                             .clickable { viewModel.cancelInAppUpdateDownload() }
                                             .padding(horizontal = 6.dp, vertical = 4.dp)
@@ -741,21 +741,21 @@ fun SettingsScreen(
                     is UpdateDownloadState.ReadyToInstall -> {
                         Surface(
                             shape = RoundedCornerShape(14.dp),
-                            color = StatusGreenBg,
-                            border = BorderStroke(1.dp, StatusGreen.copy(alpha = 0.4f)),
+                            color = palette.statusGreenBg,
+                            border = BorderStroke(1.dp, palette.statusGreen.copy(alpha = 0.4f)),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Text(
                                 text = "✅ अपडेट (${dl.versionTag}) डाउनलोड हो गया है! इंस्टॉल करने के लिए नीचे टैप करें।",
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = StatusGreen,
+                                color = palette.statusGreen,
                                 modifier = Modifier.padding(12.dp)
                             )
                         }
                         LiquidGlassButton(
                             onClick = { viewModel.installDownloadedUpdate(context) },
-                            containerColor = StatusGreen,
+                            containerColor = palette.statusGreen,
                             secondaryColor = Color(0xFF065F46),
                             shape = RoundedCornerShape(16.dp),
                             modifier = Modifier
@@ -775,15 +775,15 @@ fun SettingsScreen(
                         if (dl is UpdateDownloadState.Error) {
                             Surface(
                                 shape = RoundedCornerShape(12.dp),
-                                color = StatusRedBg,
-                                border = BorderStroke(1.dp, StatusRed.copy(alpha = 0.35f)),
+                                color = palette.statusRedBg,
+                                border = BorderStroke(1.dp, palette.statusRed.copy(alpha = 0.35f)),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Text(
                                     text = "⚠️ ${dl.message}",
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = StatusRed,
+                                    color = palette.statusRed,
                                     modifier = Modifier.padding(10.dp)
                                 )
                             }
@@ -795,7 +795,7 @@ fun SettingsScreen(
                                     onClick = {
                                         viewModel.startInAppUpdateDownload(context, st.releaseInfo)
                                     },
-                                    containerColor = StatusGreen,
+                                    containerColor = palette.statusGreen,
                                     secondaryColor = Color(0xFF065F46),
                                     shape = RoundedCornerShape(16.dp),
                                     modifier = Modifier

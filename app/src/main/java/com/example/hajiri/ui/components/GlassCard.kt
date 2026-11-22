@@ -43,6 +43,16 @@ fun LiquidGlassAmbientBackdrop(
     content: @Composable BoxScope.() -> Unit
 ) {
     val palette = LocalHajiriPalette.current
+    if (palette.isOled) {
+        Box(
+            modifier = modifier
+                .fillMaxSize()
+                .background(Color.Black),
+            content = content
+        )
+        return
+    }
+
     val orbAlphaPrimary = if (palette.isDark) 0.42f else 0.52f
     val orbAlphaSecondary = if (palette.isDark) 0.36f else 0.46f
 
@@ -131,22 +141,32 @@ fun GlassCard(
     val palette = LocalHajiriPalette.current
     val resolvedBg = backgroundColor ?: palette.glassCard
     val resolvedMidBorder = borderColor ?: palette.glassBorderMid
+    val resolvedElevation = if (palette.isOled) 0.dp else elevation
+    val borderWidth = if (palette.isOled) 1.dp else 1.35.dp
     val ambientShadow = if (palette.isDark) Color(0x5C000000) else Color(0x1E0F172A)
-    val spotShadow = if (palette.isDark) Color(0x5C1E1B4B) else palette.accent.copy(alpha = 0.20f)
+    val spotShadow = when {
+        palette.isOled -> Color.Transparent
+        palette.isDark -> Color(0x5C1E1B4B)
+        else -> palette.accent.copy(alpha = 0.20f)
+    }
 
     Surface(
         modifier = modifier
             .fillMaxWidth()
-            .shadow(
-                elevation = elevation,
-                shape = shape,
-                ambientColor = ambientShadow,
-                spotColor = spotShadow
+            .then(
+                if (resolvedElevation > 0.dp) {
+                    Modifier.shadow(
+                        elevation = resolvedElevation,
+                        shape = shape,
+                        ambientColor = ambientShadow,
+                        spotColor = spotShadow
+                    )
+                } else Modifier
             ),
         shape = shape,
         color = resolvedBg,
         border = BorderStroke(
-            width = 1.35.dp,
+            width = borderWidth,
             brush = Brush.linearGradient(
                 colors = listOf(
                     palette.glassBorderTop,
@@ -166,20 +186,30 @@ fun GlassCard(
                         brush = Brush.horizontalGradient(
                             colors = listOf(
                                 Color.Transparent,
-                                Color.White.copy(alpha = if (palette.isDark) 0.36f else 0.90f),
+                                Color.White.copy(
+                                    alpha = when {
+                                        palette.isOled -> 0.18f
+                                        palette.isDark -> 0.36f
+                                        else -> 0.90f
+                                    }
+                                ),
                                 Color.Transparent
                             )
                         ),
                         start = Offset(size.width * 0.06f, 1.dp.toPx()),
                         end = Offset(size.width * 0.94f, 1.dp.toPx()),
-                        strokeWidth = 1.25.dp.toPx()
+                        strokeWidth = if (palette.isOled) 1.dp.toPx() else 1.25.dp.toPx()
                     )
                     // Subtle lower rim glass refraction
                     drawLine(
                         brush = Brush.horizontalGradient(
                             colors = listOf(
                                 Color.Transparent,
-                                palette.accent.copy(alpha = if (palette.isDark) 0.25f else 0.16f),
+                                if (palette.isOled) {
+                                    Color.White.copy(alpha = 0.06f)
+                                } else {
+                                    palette.accent.copy(alpha = if (palette.isDark) 0.25f else 0.16f)
+                                },
                                 Color.Transparent
                             )
                         ),
@@ -196,12 +226,20 @@ fun GlassCard(
                     .blur(18.dp, edgeTreatment = BlurredEdgeTreatment.Unbounded)
                     .background(
                         brush = Brush.linearGradient(
-                            colors = listOf(
-                                palette.glassSheenTop,
-                                palette.glassSheenBottom,
-                                Color.Transparent,
-                                palette.accent.copy(alpha = if (palette.isDark) 0.08f else 0.04f)
-                            )
+                            colors = if (palette.isOled) {
+                                listOf(
+                                    palette.glassSheenTop,
+                                    palette.glassSheenBottom,
+                                    Color.Transparent
+                                )
+                            } else {
+                                listOf(
+                                    palette.glassSheenTop,
+                                    palette.glassSheenBottom,
+                                    Color.Transparent,
+                                    palette.accent.copy(alpha = if (palette.isDark) 0.08f else 0.04f)
+                                )
+                            }
                         )
                     )
             )
@@ -344,13 +382,13 @@ fun LiquidGlassOutlinedButton(
     content: @Composable RowScope.() -> Unit
 ) {
     val palette = LocalHajiriPalette.current
-    val resolvedBorder = borderColor ?: palette.accent.copy(alpha = 0.48f)
+    val resolvedBorder = borderColor ?: if (palette.isOled) palette.glassBorderMid else palette.accent.copy(alpha = 0.48f)
 
     Surface(
         shape = shape,
         color = palette.glassCard.copy(alpha = if (enabled) 0.74f else 0.45f),
         border = BorderStroke(
-            width = 1.25.dp,
+            width = if (palette.isOled) 1.dp else 1.25.dp,
             brush = Brush.verticalGradient(
                 colors = listOf(
                     palette.glassBorderTop,
@@ -359,11 +397,15 @@ fun LiquidGlassOutlinedButton(
             )
         ),
         modifier = modifier
-            .shadow(
-                elevation = if (enabled) 6.dp else 0.dp,
-                shape = shape,
-                ambientColor = Color(0x16000000),
-                spotColor = resolvedBorder.copy(alpha = 0.24f)
+            .then(
+                if (enabled && !palette.isOled) {
+                    Modifier.shadow(
+                        elevation = 6.dp,
+                        shape = shape,
+                        ambientColor = Color(0x16000000),
+                        spotColor = resolvedBorder.copy(alpha = 0.24f)
+                    )
+                } else Modifier
             )
             .clip(shape)
             .clickable(enabled = enabled, onClick = onClick)
@@ -376,7 +418,13 @@ fun LiquidGlassOutlinedButton(
                         brush = Brush.horizontalGradient(
                             colors = listOf(
                                 Color.Transparent,
-                                Color.White.copy(alpha = if (palette.isDark) 0.32f else 0.85f),
+                                Color.White.copy(
+                                    alpha = when {
+                                        palette.isOled -> 0.18f
+                                        palette.isDark -> 0.32f
+                                        else -> 0.85f
+                                    }
+                                ),
                                 Color.Transparent
                             )
                         ),

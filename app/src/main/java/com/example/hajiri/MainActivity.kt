@@ -32,8 +32,11 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.BlurredEdgeTreatment
@@ -84,6 +87,7 @@ import com.example.hajiri.ui.theme.HajiriTheme
 import com.example.hajiri.ui.theme.LocalHajiriPalette
 import com.example.hajiri.util.DailyReminderScheduler
 import com.example.hajiri.util.NetworkConnectivityObserver
+import com.example.hajiri.util.ThemePreferences
 import com.example.hajiri.viewmodel.HajiriTab
 import com.example.hajiri.viewmodel.HajiriViewModel
 import com.example.hajiri.widget.HajiriWidgetManager
@@ -93,8 +97,6 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.PersistentCacheSettings
 import com.google.firebase.firestore.firestoreSettings
 
-import androidx.compose.runtime.mutableIntStateOf
-
 class MainActivity : ComponentActivity() {
     private val openHomeTrigger = mutableIntStateOf(0)
 
@@ -103,10 +105,16 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         consumeReminderIntent(intent)
 
+        val initialTheme = ThemePreferences.getSavedTheme(this)
+        if (initialTheme == AppThemeStyle.OLED_BLACK) {
+            window.decorView.setBackgroundColor(android.graphics.Color.BLACK)
+        }
+
         setContent {
-            HajiriTheme {
-                AppContent(openHomeTrigger = openHomeTrigger.intValue)
-            }
+            AppContent(
+                initialTheme = initialTheme,
+                openHomeTrigger = openHomeTrigger.intValue
+            )
         }
     }
 
@@ -125,18 +133,24 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun AppContent(openHomeTrigger: Int = 0) {
+fun AppContent(
+    initialTheme: AppThemeStyle = AppThemeStyle.LIQUID_LIGHT,
+    openHomeTrigger: Int = 0
+) {
     val auth = Firebase.auth
     val currentUser by auth.authStateFlow().collectAsStateWithLifecycle(initialValue = auth.currentUser)
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val credentialManager = remember(context) { CredentialManager.create(context) }
+    var activeTheme by remember { mutableStateOf(initialTheme) }
 
     val user = currentUser
     if (user == null) {
-        AuthScreen(
-            onAuthSuccess = { /* authStateFlow updates automatically */ }
-        )
+        HajiriTheme(themeStyle = activeTheme) {
+            AuthScreen(
+                onAuthSuccess = { /* authStateFlow updates automatically */ }
+            )
+        }
     } else {
         val uid = user.uid
         key(uid) {
@@ -175,12 +189,26 @@ fun AppContent(openHomeTrigger: Int = 0) {
             }
 
             val settings by viewModel.settings.collectAsState()
-            val selectedTheme = AppThemeStyle.fromId(settings.themeStyle)
+            LaunchedEffect(settings.id, settings.themeStyle) {
+                if (settings.id.isNotBlank()) {
+                    val remoteTheme = AppThemeStyle.fromId(settings.themeStyle)
+                    if (activeTheme != remoteTheme) {
+                        activeTheme = remoteTheme
+                        ThemePreferences.saveTheme(context, remoteTheme)
+                    }
+                }
+            }
 
-            HajiriTheme(themeStyle = selectedTheme) {
+            HajiriTheme(themeStyle = activeTheme) {
                 MainApp(
                     viewModel = viewModel,
                     googleEmail = user.email ?: "",
+                    activeTheme = activeTheme,
+                    onSelectTheme = { chosen ->
+                        activeTheme = chosen
+                        ThemePreferences.saveTheme(context, chosen)
+                        viewModel.updateThemeStyle(chosen)
+                    },
                     openHomeTrigger = openHomeTrigger,
                     onSignOut = {
                         DailyReminderScheduler.clearTodayAttendanceStatus(context)
@@ -196,6 +224,8 @@ fun AppContent(openHomeTrigger: Int = 0) {
 fun MainApp(
     viewModel: HajiriViewModel,
     googleEmail: String,
+    activeTheme: AppThemeStyle,
+    onSelectTheme: (AppThemeStyle) -> Unit,
     openHomeTrigger: Int = 0,
     onSignOut: () -> Unit
 ) {
@@ -322,6 +352,7 @@ fun MainApp(
                         HajiriTab.SETTINGS -> SettingsScreen(
                             viewModel = viewModel,
                             googleEmail = googleEmail,
+                            activeTheme = activeTheme,
                             onSignOut = onSignOut
                         )
                     }
@@ -371,9 +402,9 @@ fun MainApp(
 
         if (showTheme) {
             ThemePickerDialog(
-                currentTheme = AppThemeStyle.fromId(settings.themeStyle),
+                currentTheme = activeTheme,
                 onDismiss = { viewModel.showThemeDialog.value = false },
-                onSelectTheme = { theme -> viewModel.updateThemeStyle(theme) }
+                onSelectTheme = { theme -> onSelectTheme(theme) }
             )
         }
 
@@ -467,19 +498,28 @@ fun FloatingLiquidDock(
         contentAlignment = Alignment.Center
     ) {
         val dockShape = RoundedCornerShape(34.dp)
+        val dockBg = when {
+            palette.isOled -> Color(0xE60E0E12)
+            palette.isDark -> palette.glassCardHigh.copy(alpha = 0.78f)
+            else -> palette.glassCardHigh.copy(alpha = 0.76f)
+        }
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .shadow(
-                    elevation = 22.dp,
-                    shape = dockShape,
-                    ambientColor = Color(0x33000000),
-                    spotColor = palette.accent.copy(alpha = 0.30f)
+                .then(
+                    if (!palette.isOled) {
+                        Modifier.shadow(
+                            elevation = 22.dp,
+                            shape = dockShape,
+                            ambientColor = Color(0x33000000),
+                            spotColor = palette.accent.copy(alpha = 0.30f)
+                        )
+                    } else Modifier
                 ),
             shape = dockShape,
-            color = palette.glassCardHigh.copy(alpha = if (palette.isDark) 0.78f else 0.76f),
+            color = dockBg,
             border = BorderStroke(
-                width = 1.4.dp,
+                width = if (palette.isOled) 1.dp else 1.4.dp,
                 brush = Brush.verticalGradient(
                     colors = listOf(
                         palette.glassBorderTop,
@@ -499,13 +539,19 @@ fun FloatingLiquidDock(
                             brush = Brush.horizontalGradient(
                                 colors = listOf(
                                     Color.Transparent,
-                                    Color.White.copy(alpha = if (palette.isDark) 0.36f else 0.90f),
+                                    Color.White.copy(
+                                        alpha = when {
+                                            palette.isOled -> 0.18f
+                                            palette.isDark -> 0.36f
+                                            else -> 0.90f
+                                        }
+                                    ),
                                     Color.Transparent
                                 )
                             ),
                             start = Offset(size.width * 0.08f, 1.dp.toPx()),
                             end = Offset(size.width * 0.92f, 1.dp.toPx()),
-                            strokeWidth = 1.2.dp.toPx()
+                            strokeWidth = if (palette.isOled) 1.dp.toPx() else 1.2.dp.toPx()
                         )
                     }
             ) {
@@ -533,10 +579,18 @@ fun FloatingLiquidDock(
                         val isSelected = tab == selectedTab
                         Surface(
                             shape = RoundedCornerShape(20.dp),
-                            color = if (isSelected) palette.accent.copy(alpha = if (palette.isDark) 0.30f else 0.16f) else Color.Transparent,
+                            color = if (isSelected) {
+                                palette.accent.copy(
+                                    alpha = when {
+                                        palette.isOled -> 0.18f
+                                        palette.isDark -> 0.30f
+                                        else -> 0.16f
+                                    }
+                                )
+                            } else Color.Transparent,
                             border = if (isSelected) {
                                 BorderStroke(
-                                    1.25.dp,
+                                    if (palette.isOled) 1.dp else 1.25.dp,
                                     Brush.verticalGradient(
                                         listOf(
                                             palette.glassBorderTop,

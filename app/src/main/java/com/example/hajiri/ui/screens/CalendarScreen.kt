@@ -135,7 +135,7 @@ fun CalendarAttendanceCard(
                         text = dayName,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.ExtraBold,
-                        color = if (idx == 0) StatusRed else palette.textPrimary,
+                        color = if (idx == 0) palette.statusRed else palette.textPrimary,
                         textAlign = TextAlign.Center,
                         modifier = Modifier.weight(1f)
                     )
@@ -194,9 +194,9 @@ fun CalendarAttendanceCard(
                 horizontalArrangement = Arrangement.SpaceAround,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                LegendItem(StatusGreen, "P हाजिर")
-                LegendItem(StatusRed, "A गैरहाजिर")
-                LegendItem(StatusYellow, "HD आधा")
+                LegendItem(palette.statusGreen, "P हाजिर")
+                LegendItem(palette.statusRed, "A गैरहाजिर")
+                LegendItem(palette.statusYellow, "HD आधा")
                 LegendItem(palette.accent, "नोट")
             }
         }
@@ -215,13 +215,13 @@ fun CalendarDayCell(
 ) {
     val palette = LocalHajiriPalette.current
     val (bgColor, textColor) = when (status) {
-        AttendanceStatus.PRESENT -> Pair(StatusGreenBg, StatusGreen)
-        AttendanceStatus.ABSENT -> Pair(StatusRedBg, StatusRed)
-        AttendanceStatus.HALF -> Pair(StatusYellowBg, StatusYellow)
-        AttendanceStatus.LEAVE -> Pair(StatusBlueBg, StatusBlue)
+        AttendanceStatus.PRESENT -> Pair(palette.statusGreenBg, palette.statusGreen)
+        AttendanceStatus.ABSENT -> Pair(palette.statusRedBg, palette.statusRed)
+        AttendanceStatus.HALF -> Pair(palette.statusYellowBg, palette.statusYellow)
+        AttendanceStatus.LEAVE -> Pair(palette.statusBlueBg, palette.statusBlue)
         null -> Pair(
-            palette.glassCardHigh.copy(alpha = if (palette.isDark) 0.35f else 0.45f),
-            if (isSunday) StatusRed else palette.textPrimary
+            palette.glassCardHigh.copy(alpha = if (palette.isOled) 0.55f else if (palette.isDark) 0.35f else 0.45f),
+            if (isSunday) palette.statusRed else palette.textPrimary
         )
     }
 

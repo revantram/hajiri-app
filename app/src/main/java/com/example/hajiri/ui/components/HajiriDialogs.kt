@@ -45,6 +45,7 @@ import com.example.hajiri.ui.theme.LiquidDarkPalette
 import com.example.hajiri.ui.theme.LiquidLightPalette
 import com.example.hajiri.ui.theme.LocalHajiriPalette
 import com.example.hajiri.ui.theme.OceanGlassPalette
+import com.example.hajiri.ui.theme.OledBlackPalette
 import com.example.hajiri.ui.theme.RoseGoldPalette
 import com.example.hajiri.ui.theme.StatusGreen
 import com.example.hajiri.ui.theme.StatusGreenBright
@@ -565,6 +566,7 @@ fun ThemePickerDialog(
                         AppThemeStyle.OCEAN_GLASS -> OceanGlassPalette
                         AppThemeStyle.ROSE_GOLD -> RoseGoldPalette
                         AppThemeStyle.LIQUID_DARK -> LiquidDarkPalette
+                        AppThemeStyle.OLED_BLACK -> OledBlackPalette
                     }
                     val isSelected = themeOption == currentTheme
 
@@ -588,26 +590,46 @@ fun ThemePickerDialog(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(34.dp)
-                                        .background(
-                                            brush = Brush.linearGradient(
-                                                listOf(optionPalette.accent, optionPalette.meshTopLeft)
-                                            ),
-                                            shape = CircleShape
-                                        ),
-                                    contentAlignment = Alignment.Center
+                                Surface(
+                                    shape = CircleShape,
+                                    color = if (optionPalette.isOled) Color.Black else Color.Transparent,
+                                    border = if (optionPalette.isOled) {
+                                        BorderStroke(1.2.dp, Color.White.copy(alpha = 0.35f))
+                                    } else null,
+                                    modifier = Modifier.size(34.dp)
                                 ) {
-                                    Text(text = themeOption.emoji, fontSize = 16.sp)
+                                    Box(
+                                        modifier = if (optionPalette.isOled) {
+                                            Modifier.background(Color.Black, CircleShape)
+                                        } else {
+                                            Modifier.background(
+                                                brush = Brush.linearGradient(
+                                                    listOf(optionPalette.accent, optionPalette.meshTopLeft)
+                                                ),
+                                                shape = CircleShape
+                                            )
+                                        },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(text = themeOption.emoji, fontSize = 16.sp)
+                                    }
                                 }
                                 Spacer(modifier = Modifier.width(12.dp))
-                                Text(
-                                    text = themeOption.labelHindi,
-                                    fontSize = 15.sp,
-                                    fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.SemiBold,
-                                    color = palette.textPrimary
-                                )
+                                Column {
+                                    Text(
+                                        text = themeOption.labelHindi,
+                                        fontSize = 15.sp,
+                                        fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.SemiBold,
+                                        color = palette.textPrimary
+                                    )
+                                    if (optionPalette.isOled) {
+                                        Text(
+                                            text = "ट्रू पिच ब्लैक (#000000) • बैटरी सेवर",
+                                            fontSize = 10.sp,
+                                            color = palette.textSecondary
+                                        )
+                                    }
+                                }
                             }
 
                             if (isSelected) {

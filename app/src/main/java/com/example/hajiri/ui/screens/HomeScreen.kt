@@ -160,7 +160,7 @@ fun HomeScreen(
         if (availableUpdate != null) {
             item {
                 GlassCard(
-                    borderColor = StatusGreen.copy(alpha = 0.55f),
+                    borderColor = palette.statusGreen.copy(alpha = 0.55f),
                     modifier = Modifier
                         .clickable { viewModel.showUpdateDialog.value = true }
                         .testTag("home_update_banner")
@@ -175,7 +175,7 @@ fun HomeScreen(
                                 text = "🎉 नया ऐप अपडेट (${availableUpdate.latestTag})",
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.ExtraBold,
-                                color = StatusGreen
+                                color = palette.statusGreen
                             )
                             Text(
                                 text = "1 क्लिक में नया वर्ज़न प्राप्त करें",
@@ -185,7 +185,7 @@ fun HomeScreen(
                         }
                         Surface(
                             shape = RoundedCornerShape(50),
-                            color = StatusGreen
+                            color = palette.statusGreen
                         ) {
                             Text(
                                 text = "अपडेट ⬇️",
@@ -211,9 +211,9 @@ fun HomeScreen(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                StatCard("हाजिरी", stats.presentDays.toString(), StatusGreen, StatusGreenBg, Modifier.weight(1f))
-                StatCard("गैरहाजिरी", stats.absentDays.toString(), StatusRed, StatusRedBg, Modifier.weight(1f))
-                StatCard("आधा दिन", stats.halfDays.toString(), StatusYellow, StatusYellowBg, Modifier.weight(1f))
+                StatCard("हाजिरी", stats.presentDays.toString(), palette.statusGreen, palette.statusGreenBg, Modifier.weight(1f))
+                StatCard("गैरहाजिरी", stats.absentDays.toString(), palette.statusRed, palette.statusRedBg, Modifier.weight(1f))
+                StatCard("आधा दिन", stats.halfDays.toString(), palette.statusYellow, palette.statusYellowBg, Modifier.weight(1f))
             }
         }
 
@@ -255,7 +255,7 @@ fun HomeScreen(
                                 text = "₹${DateUtils.formatInr(stats.baseEarnings + stats.otEarnings)}",
                                 fontSize = 30.sp,
                                 fontWeight = FontWeight.ExtraBold,
-                                color = StatusGreen
+                                color = palette.statusGreen
                             )
                         }
 
@@ -296,7 +296,7 @@ fun HomeScreen(
                             text = "-₹${DateUtils.formatInr(stats.totalAdvance)}",
                             fontSize = 15.sp,
                             fontWeight = FontWeight.ExtraBold,
-                            color = AdvancePink
+                            color = palette.expenseRed
                         )
                     }
 
@@ -317,7 +317,7 @@ fun HomeScreen(
                                 text = "+₹${DateUtils.formatInr(stats.carryForwardAdded)}",
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = OtOrange
+                                color = palette.otAmber
                             )
                         }
                     }
@@ -347,7 +347,7 @@ fun HomeScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(7.dp),
-                        color = StatusGreenBright,
+                        color = if (palette.isOled) palette.statusGreen else StatusGreenBright,
                         trackColor = palette.progressTrackBg
                     )
                 }
@@ -419,9 +419,9 @@ fun HomeScreen(
                                 fontSize = 22.sp,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = when {
-                                    displayPending <= 0.0 && stats.isPreviousMonthReceived -> StatusGreen
+                                    displayPending <= 0.0 && stats.isPreviousMonthReceived -> palette.statusGreen
                                     displayPending <= 0.0 -> palette.textMuted
-                                    else -> OtOrange
+                                    else -> palette.otAmber
                                 }
                             )
                             if (stats.previousMonthPaidAmount > 0.0 && !stats.isPreviousMonthReceived) {
@@ -443,9 +443,9 @@ fun HomeScreen(
                             fontSize = 11.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = when {
-                                displayPending <= 0.01 && stats.previousMonthPaidAmount > 0.0 -> StatusGreen
+                                displayPending <= 0.01 && stats.previousMonthPaidAmount > 0.0 -> palette.statusGreen
                                 displayPending <= 0.01 -> palette.textMuted
-                                else -> OtOrange
+                                else -> palette.otAmber
                             }
                         )
                     }
@@ -459,10 +459,10 @@ fun HomeScreen(
                             val unpaidActive = !stats.isPreviousMonthReceived && stats.previousMonthPaidAmount <= 0.0
                             Surface(
                                 shape = RoundedCornerShape(12.dp),
-                                color = if (unpaidActive) OtOrange.copy(alpha = 0.16f) else palette.segmentedTrackBg,
+                                color = if (unpaidActive) palette.otAmber.copy(alpha = 0.16f) else palette.segmentedTrackBg,
                                 border = BorderStroke(
                                     width = if (unpaidActive) 1.5.dp else 1.dp,
-                                    color = if (unpaidActive) OtOrange else palette.glassBorderMid
+                                    color = if (unpaidActive) palette.otAmber else palette.glassBorderMid
                                 ),
                                 modifier = Modifier
                                     .weight(1f)
@@ -479,7 +479,7 @@ fun HomeScreen(
                                         text = if (unpaidActive) "✓ बाकी जोड़ें" else "बाकी जोड़ें",
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = if (unpaidActive) OtOrange else palette.textSecondary
+                                        color = if (unpaidActive) palette.otAmber else palette.textSecondary
                                     )
                                 }
                             }
@@ -513,10 +513,10 @@ fun HomeScreen(
                             val paidActive = stats.isPreviousMonthReceived
                             Surface(
                                 shape = RoundedCornerShape(12.dp),
-                                color = if (paidActive) StatusGreen.copy(alpha = 0.16f) else palette.segmentedTrackBg,
+                                color = if (paidActive) palette.statusGreen.copy(alpha = 0.16f) else palette.segmentedTrackBg,
                                 border = BorderStroke(
                                     width = if (paidActive) 1.5.dp else 1.dp,
-                                    color = if (paidActive) StatusGreen else palette.glassBorderMid
+                                    color = if (paidActive) palette.statusGreen else palette.glassBorderMid
                                 ),
                                 modifier = Modifier
                                     .weight(1f)
@@ -533,7 +533,7 @@ fun HomeScreen(
                                         text = if (paidActive) "✓ पूरा मिला" else "पूरा मिला",
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = if (paidActive) StatusGreen else palette.textSecondary
+                                        color = if (paidActive) palette.statusGreen else palette.textSecondary
                                     )
                                 }
                             }
@@ -558,14 +558,14 @@ fun HomeScreen(
                                 text = "₹${DateUtils.formatInr(stats.totalAdvance)}",
                                 fontSize = 22.sp,
                                 fontWeight = FontWeight.ExtraBold,
-                                color = AdvancePink
+                                color = palette.expenseRed
                             )
                         }
 
                         LiquidGlassButton(
                             onClick = { viewModel.showAdvanceDialog.value = true },
-                            containerColor = AdvancePink,
-                            secondaryColor = Color(0xFF9D174D),
+                            containerColor = palette.expenseRed,
+                            secondaryColor = if (palette.isOled) Color(0xFFB91C1C) else Color(0xFF9D174D),
                             shape = RoundedCornerShape(14.dp),
                             minHeight = 44.dp,
                             modifier = Modifier.testTag("open_advance_modal_btn")
@@ -648,10 +648,10 @@ fun HomeScreen(
                 val ot = otHours[entry.key]
 
                 val (dotCol, bgCol, textCol) = when (entry.value.status) {
-                    AttendanceStatus.PRESENT -> Triple(StatusGreen, StatusGreenBg, StatusGreen)
-                    AttendanceStatus.ABSENT -> Triple(StatusRed, StatusRedBg, StatusRed)
-                    AttendanceStatus.HALF -> Triple(StatusYellow, StatusYellowBg, StatusYellow)
-                    AttendanceStatus.LEAVE -> Triple(StatusBlue, StatusBlueBg, StatusBlue)
+                    AttendanceStatus.PRESENT -> Triple(palette.statusGreen, palette.statusGreenBg, palette.statusGreen)
+                    AttendanceStatus.ABSENT -> Triple(palette.statusRed, palette.statusRedBg, palette.statusRed)
+                    AttendanceStatus.HALF -> Triple(palette.statusYellow, palette.statusYellowBg, palette.statusYellow)
+                    AttendanceStatus.LEAVE -> Triple(palette.statusBlue, palette.statusBlueBg, palette.statusBlue)
                 }
 
                 GlassCard {
@@ -765,7 +765,7 @@ fun AdvanceItemRow(
         modifier = Modifier
             .fillMaxWidth()
             .background(palette.glassCardHigh.copy(alpha = 0.78f), RoundedCornerShape(12.dp))
-            .border(1.dp, AdvancePink.copy(alpha = 0.22f), RoundedCornerShape(12.dp))
+            .border(1.dp, palette.expenseRed.copy(alpha = 0.22f), RoundedCornerShape(12.dp))
             .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
@@ -790,7 +790,7 @@ fun AdvanceItemRow(
                 text = "-₹${DateUtils.formatInr(advance.amount)}",
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
-                color = AdvancePink
+                color = palette.expenseRed
             )
             IconButton(
                 onClick = onDelete,

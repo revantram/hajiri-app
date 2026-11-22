@@ -62,7 +62,7 @@
         },
         "themeStyle": {
           "type": "string",
-          "enum": ["liquid_light", "ocean_glass", "rose_gold", "liquid_dark"],
+          "enum": ["liquid_light", "ocean_glass", "rose_gold", "liquid_dark", "oled_black"],
           "description": "Selected UI theme style"
         },
         "settledMonths": {

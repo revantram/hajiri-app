@@ -48,14 +48,7 @@ import com.example.hajiri.data.onGoogleSignInClicked
 import com.example.hajiri.ui.components.GlassCard
 import com.example.hajiri.ui.components.LiquidGlassAmbientBackdrop
 import com.example.hajiri.ui.components.LiquidGlassButton
-import com.example.hajiri.ui.theme.AccentIndigo
-import com.example.hajiri.ui.theme.AccentPurple
-import com.example.hajiri.ui.theme.StatusGreen
-import com.example.hajiri.ui.theme.StatusGreenBg
-import com.example.hajiri.ui.theme.StatusRed
-import com.example.hajiri.ui.theme.StatusRedBg
-import com.example.hajiri.ui.theme.TextPrimary
-import com.example.hajiri.ui.theme.TextSecondary
+import com.example.hajiri.ui.theme.LocalHajiriPalette
 
 @Composable
 fun AuthScreen(
@@ -63,6 +56,7 @@ fun AuthScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val palette = LocalHajiriPalette.current
     val coroutineScope = rememberCoroutineScope()
     val credentialManager = remember(context) { CredentialManager.create(context) }
 
@@ -106,10 +100,10 @@ fun AuthScreen(
                 Box(
                     modifier = Modifier
                         .size(72.dp)
-                        .shadow(10.dp, CircleShape, spotColor = Color(0x334F46E5))
+                        .shadow(if (palette.isOled) 0.dp else 10.dp, CircleShape, spotColor = palette.accent.copy(alpha = 0.25f))
                         .background(
                             brush = Brush.linearGradient(
-                                listOf(Color(0xFF6366F1), Color(0xFF4338CA))
+                                listOf(palette.accent, palette.accentSecondary)
                             ),
                             shape = CircleShape
                         ),
@@ -124,14 +118,14 @@ fun AuthScreen(
                     text = "हाजिरी ऐप",
                     fontSize = 28.sp,
                     fontWeight = FontWeight.ExtraBold,
-                    color = TextPrimary
+                    color = palette.textPrimary
                 )
 
                 Text(
                     text = "Firebase क्लाउड बैकअप के साथ सुरक्षित",
                     fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = AccentIndigo,
+                    color = palette.accent,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
                 )
@@ -139,8 +133,8 @@ fun AuthScreen(
                 // Cloud Benefits Pill
                 Surface(
                     shape = RoundedCornerShape(16.dp),
-                    color = StatusGreenBg.copy(alpha = 0.85f),
-                    border = BorderStroke(1.dp, StatusGreen.copy(alpha = 0.25f)),
+                    color = if (palette.isOled) palette.statusGreenBg else palette.statusGreenBg.copy(alpha = 0.85f),
+                    border = BorderStroke(1.dp, palette.statusGreen.copy(alpha = 0.28f)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(
@@ -151,17 +145,17 @@ fun AuthScreen(
                             text = "☁️ कभी भी डेटा नहीं खोएगा:",
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold,
-                            color = StatusGreen
+                            color = palette.statusGreen
                         )
                         Text(
                             text = "• ऐप डिलीट होने या नया फोन लेने पर भी पूरी हाजिरी, OT और एडवांस वापस मिलेंगे।",
                             fontSize = 12.sp,
-                            color = TextPrimary
+                            color = palette.textPrimary
                         )
                         Text(
                             text = "• आपका डेटा केवल आपके Google अकाउंट से सुरक्षित रहता है।",
                             fontSize = 12.sp,
-                            color = TextSecondary
+                            color = palette.textSecondary
                         )
                     }
                 }
@@ -171,15 +165,15 @@ fun AuthScreen(
                 if (!errorMessage.isNullOrBlank()) {
                     Surface(
                         shape = RoundedCornerShape(12.dp),
-                        color = StatusRedBg,
-                        border = BorderStroke(1.dp, StatusRed.copy(alpha = 0.3f)),
+                        color = palette.statusRedBg,
+                        border = BorderStroke(1.dp, palette.statusRed.copy(alpha = 0.3f)),
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(bottom = 14.dp)
                     ) {
                         Text(
                             text = "⚠️ $errorMessage",
-                            color = StatusRed,
+                            color = palette.statusRed,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.SemiBold,
                             modifier = Modifier.padding(12.dp)
@@ -209,8 +203,8 @@ fun AuthScreen(
                         )
                     },
                     enabled = !isSigningIn && !isCheckingSilent,
-                    containerColor = AccentIndigo,
-                    secondaryColor = AccentPurple,
+                    containerColor = palette.accent,
+                    secondaryColor = palette.accentSecondary,
                     shape = RoundedCornerShape(18.dp),
                     minHeight = 54.dp,
                     modifier = Modifier
@@ -245,7 +239,7 @@ fun AuthScreen(
                                     text = "G",
                                     fontSize = 15.sp,
                                     fontWeight = FontWeight.ExtraBold,
-                                    color = AccentIndigo
+                                    color = palette.accent
                                 )
                             }
                             Spacer(modifier = Modifier.width(10.dp))

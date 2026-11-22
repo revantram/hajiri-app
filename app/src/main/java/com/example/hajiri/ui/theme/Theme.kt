@@ -1,6 +1,7 @@
 package com.example.hajiri.ui.theme
 
 import android.app.Activity
+import android.os.Build
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
@@ -8,6 +9,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 import com.example.hajiri.model.AppThemeStyle
@@ -24,6 +26,7 @@ fun HajiriTheme(
         AppThemeStyle.OCEAN_GLASS -> OceanGlassPalette
         AppThemeStyle.ROSE_GOLD -> RoseGoldPalette
         AppThemeStyle.LIQUID_DARK -> LiquidDarkPalette
+        AppThemeStyle.OLED_BLACK -> OledBlackPalette
     }
 
     val colorScheme = if (palette.isDark) {
@@ -32,7 +35,7 @@ fun HajiriTheme(
             onPrimary = TextLight,
             secondary = palette.accentSecondary,
             onSecondary = TextLight,
-            tertiary = OtOrange,
+            tertiary = palette.otAmber,
             background = palette.background,
             onBackground = palette.textPrimary,
             surface = palette.glassCard,
@@ -47,7 +50,7 @@ fun HajiriTheme(
             onPrimary = TextLight,
             secondary = palette.accentSecondary,
             onSecondary = TextLight,
-            tertiary = OtOrange,
+            tertiary = palette.otAmber,
             background = palette.background,
             onBackground = palette.textPrimary,
             surface = palette.glassCard,
@@ -63,6 +66,10 @@ fun HajiriTheme(
         SideEffect {
             val window = (view.context as? Activity)?.window
             if (window != null) {
+                window.decorView.setBackgroundColor(palette.background.toArgb())
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    window.isNavigationBarContrastEnforced = !palette.isOled
+                }
                 val insetsController = WindowCompat.getInsetsController(window, view)
                 insetsController.isAppearanceLightStatusBars = !palette.isDark
                 insetsController.isAppearanceLightNavigationBars = !palette.isDark

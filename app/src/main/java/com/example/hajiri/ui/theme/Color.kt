@@ -53,6 +53,7 @@ val TextLight = Color(0xFFFFFFFF)
 
 data class HajiriPalette(
     val isDark: Boolean,
+    val isOled: Boolean = false,
     val background: Color,
     val meshTopLeft: Color,
     val meshTopRight: Color,
@@ -75,7 +76,19 @@ data class HajiriPalette(
     val fieldFocusedBg: Color,
     val fieldUnfocusedBg: Color,
     val segmentedTrackBg: Color,
-    val progressTrackBg: Color
+    val progressTrackBg: Color,
+    val statusGreen: Color = StatusGreen,
+    val statusGreenBg: Color = StatusGreenBg,
+    val statusRed: Color = StatusRed,
+    val statusRedBg: Color = StatusRedBg,
+    val statusYellow: Color = StatusYellow,
+    val statusYellowBg: Color = StatusYellowBg,
+    val statusBlue: Color = StatusBlue,
+    val statusBlueBg: Color = StatusBlueBg,
+    val expenseRed: Color = AdvancePink,
+    val expenseRedBg: Color = AdvancePinkBg,
+    val otAmber: Color = OtOrange,
+    val otAmberBg: Color = OtOrangeBg
 )
 
 val LiquidLightPalette = HajiriPalette(
@@ -184,4 +197,44 @@ val LiquidDarkPalette = HajiriPalette(
     fieldUnfocusedBg = Color(0x3B0F172A),
     segmentedTrackBg = Color(0xA61E293B),
     progressTrackBg = Color(0xB324324A)
+)
+
+val OledBlackPalette = HajiriPalette(
+    isDark = true,
+    isOled = true,
+    background = Color(0xFF000000),
+    meshTopLeft = Color(0xFF000000),
+    meshTopRight = Color(0xFF000000),
+    meshCenter = Color(0xFF000000),
+    meshBottom = Color(0xFF000000),
+    glassCard = Color(0xBD101014),        // rgba(16, 16, 20, 0.74)
+    glassCardHigh = Color(0xEB0C0C0F),    // #0C0C0F ultra-dark frosted glass
+    glassBorderTop = Color(0x2EFFFFFF),   // rgba(255, 255, 255, 0.18) top highlight
+    glassBorderMid = Color(0x1FFFFFFF),   // rgba(255, 255, 255, 0.12) crisp 1dp border
+    glassBorderBottom = Color(0x14FFFFFF),
+    glassSheenTop = Color(0x12FFFFFF),
+    glassSheenBottom = Color(0x04FFFFFF),
+    accent = Color(0xFF38BDF8),
+    accentSecondary = Color(0xFF818CF8),
+    textPrimary = Color(0xFFFFFFFF),
+    textSecondary = Color(0xFFA1A1AA),
+    textMuted = Color(0xFF71717A),
+    divider = Color(0x1FFFFFFF),
+    fieldUnfocusedBorder = Color(0x29FFFFFF),
+    fieldFocusedBg = Color(0xFF121216),
+    fieldUnfocusedBg = Color(0xFF0A0A0D),
+    segmentedTrackBg = Color(0xFF101014),
+    progressTrackBg = Color(0xFF1C1C22),
+    statusGreen = Color(0xFF10B981),
+    statusGreenBg = Color(0x2610B981),    // 15% opacity pill fill
+    statusRed = Color(0xFFEF4444),
+    statusRedBg = Color(0x26EF4444),      // 15% opacity pill fill
+    statusYellow = Color(0xFFF59E0B),
+    statusYellowBg = Color(0x26F59E0B),   // 15% opacity pill fill
+    statusBlue = Color(0xFF38BDF8),
+    statusBlueBg = Color(0x2638BDF8),
+    expenseRed = Color(0xFFEF4444),
+    expenseRedBg = Color(0x26EF4444),
+    otAmber = Color(0xFFF59E0B),
+    otAmberBg = Color(0x26F59E0B)
 )

@@ -146,10 +146,10 @@ fun HistoryScreen(
                 val ot = otHours[entry.key]
 
                 val (dotCol, bgCol, textCol) = when (entry.value.status) {
-                    AttendanceStatus.PRESENT -> Triple(StatusGreen, StatusGreenBg, StatusGreen)
-                    AttendanceStatus.ABSENT -> Triple(StatusRed, StatusRedBg, StatusRed)
-                    AttendanceStatus.HALF -> Triple(StatusYellow, StatusYellowBg, StatusYellow)
-                    AttendanceStatus.LEAVE -> Triple(StatusBlue, StatusBlueBg, StatusBlue)
+                    AttendanceStatus.PRESENT -> Triple(palette.statusGreen, palette.statusGreenBg, palette.statusGreen)
+                    AttendanceStatus.ABSENT -> Triple(palette.statusRed, palette.statusRedBg, palette.statusRed)
+                    AttendanceStatus.HALF -> Triple(palette.statusYellow, palette.statusYellowBg, palette.statusYellow)
+                    AttendanceStatus.LEAVE -> Triple(palette.statusBlue, palette.statusBlueBg, palette.statusBlue)
                 }
 
                 GlassCard(

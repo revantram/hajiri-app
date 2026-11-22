@@ -259,7 +259,7 @@ fun ExpenseScreen(
         // 2. Top Summary Card ("इस महीने का कुल खर्च")
         item {
             GlassCard(
-                borderColor = AdvancePink.copy(alpha = 0.35f),
+                borderColor = palette.expenseRed.copy(alpha = 0.35f),
                 modifier = Modifier.testTag("expense_summary_card")
             ) {
                 Column {
@@ -276,13 +276,13 @@ fun ExpenseScreen(
                         )
                         Surface(
                             shape = RoundedCornerShape(50),
-                            color = AdvancePink.copy(alpha = 0.12f)
+                            color = palette.expenseRed.copy(alpha = 0.15f)
                         ) {
                             Text(
                                 text = "${summary.entries.size} प्रविष्टियाँ",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = AdvancePink,
+                                color = palette.expenseRed,
                                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
                             )
                         }
@@ -294,7 +294,7 @@ fun ExpenseScreen(
                         text = "₹${DateUtils.formatInr(summary.totalExpense)}",
                         fontSize = 34.sp,
                         fontWeight = FontWeight.ExtraBold,
-                        color = AdvancePink,
+                        color = palette.expenseRed,
                         modifier = Modifier.testTag("expense_total_amount_text")
                     )
 
@@ -302,7 +302,7 @@ fun ExpenseScreen(
                     HorizontalDivider(color = palette.divider)
                     Spacer(modifier = Modifier.height(10.dp))
 
-                    val savingsColor = if (summary.netSavings >= 0.0) StatusGreen else StatusRed
+                    val savingsColor = if (summary.netSavings >= 0.0) palette.statusGreen else palette.statusRed
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -586,8 +586,16 @@ private fun ExpensePdfLedgerCard(
     onDelete: (ExpenseRecord) -> Unit
 ) {
     val palette = LocalHajiriPalette.current
-    val headerBg = if (palette.isDark) Color(0x3838BDF8) else Color(0x160F172A)
-    val altRowBg = if (palette.isDark) Color(0x14FFFFFF) else Color(0x090F172A)
+    val headerBg = when {
+        palette.isOled -> Color(0xFF16161C)
+        palette.isDark -> Color(0x3838BDF8)
+        else -> Color(0x160F172A)
+    }
+    val altRowBg = when {
+        palette.isOled -> Color(0x0AFFFFFF)
+        palette.isDark -> Color(0x14FFFFFF)
+        else -> Color(0x090F172A)
+    }
 
     GlassCard(
         contentPadding = 0.dp,
@@ -678,7 +686,7 @@ private fun ExpensePdfLedgerCard(
                         text = "₹${DateUtils.formatInr(expense.amount)}",
                         fontSize = 14.sp,
                         fontWeight = FontWeight.ExtraBold,
-                        color = AdvancePink,
+                        color = palette.expenseRed,
                         textAlign = TextAlign.End,
                         modifier = Modifier.width(80.dp)
                     )
@@ -717,7 +725,7 @@ private fun ExpensePdfLedgerCard(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(AdvancePink.copy(alpha = if (palette.isDark) 0.16f else 0.08f))
+                    .background(palette.expenseRed.copy(alpha = if (palette.isDark) 0.15f else 0.08f))
                     .padding(horizontal = 14.dp, vertical = 12.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
@@ -732,7 +740,7 @@ private fun ExpensePdfLedgerCard(
                     text = "₹${DateUtils.formatInr(totalExpense)}",
                     fontSize = 16.sp,
                     fontWeight = FontWeight.ExtraBold,
-                    color = AdvancePink
+                    color = palette.expenseRed
                 )
             }
         }

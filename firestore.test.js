@@ -308,6 +308,14 @@ test("Settings & Advances: owner CRUD succeeds; cross-user and invalid payloads 
     })
   );
 
+  // OLED Black 5th theme succeeds
+  await assertSucceeds(
+    settRef.update({
+      themeStyle: "oled_black",
+      updatedAt: validTimestamp(),
+    })
+  );
+
   // Invalid themeStyle fails
   await assertFails(
     settRef.update({

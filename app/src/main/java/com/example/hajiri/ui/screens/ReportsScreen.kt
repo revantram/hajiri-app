@@ -238,12 +238,12 @@ fun ReportsScreen(
                     modifier = Modifier.padding(bottom = 8.dp)
                 )
 
-                BreakdownRow("✅ हाजिर दिन", "${stats.presentDays} दिन", StatusGreen)
-                BreakdownRow("❌ गैरहाजिर", "${stats.absentDays} दिन", StatusRed)
-                BreakdownRow("🌓 आधा दिन", "${stats.halfDays} दिन", StatusYellow)
-                BreakdownRow("✈️ छुट्टी", "${stats.leaveDays} दिन", StatusBlue)
-                BreakdownRow("⏰ ओवरटाइम", "${stats.totalOtHours} घंटे", OtOrange)
-                BreakdownRow("💳 एडवांस", "-₹${DateUtils.formatInr(stats.totalAdvance)}", AdvancePink)
+                BreakdownRow("✅ हाजिर दिन", "${stats.presentDays} दिन", palette.statusGreen)
+                BreakdownRow("❌ गैरहाजिर", "${stats.absentDays} दिन", palette.statusRed)
+                BreakdownRow("🌓 आधा दिन", "${stats.halfDays} दिन", palette.statusYellow)
+                BreakdownRow("✈️ छुट्टी", "${stats.leaveDays} दिन", palette.statusBlue)
+                BreakdownRow("⏰ ओवरटाइम", "${stats.totalOtHours} घंटे", palette.otAmber)
+                BreakdownRow("💳 एडवांस", "-₹${DateUtils.formatInr(stats.totalAdvance)}", palette.expenseRed)
 
                 if (stats.previousMonthRawBalance > 0.0 && stats.previousMonthKey.isNotBlank()) {
                     val prevValueText = if (stats.isPreviousMonthReceived) {
@@ -251,7 +251,7 @@ fun ReportsScreen(
                     } else {
                         "+₹${DateUtils.formatInr(stats.carryForwardAdded)}"
                     }
-                    val prevValueColor = if (stats.isPreviousMonthReceived) palette.textMuted else OtOrange
+                    val prevValueColor = if (stats.isPreviousMonthReceived) palette.textMuted else palette.otAmber
                     BreakdownRow(
                         label = "💼 पिछला बाकी (${stats.previousMonthTitle})",
                         value = prevValueText,
@@ -267,10 +267,10 @@ fun ReportsScreen(
                     ) {
                         Surface(
                             shape = RoundedCornerShape(10.dp),
-                            color = if (stats.isPreviousMonthReceived) StatusGreen.copy(alpha = 0.14f) else OtOrange.copy(alpha = 0.14f),
+                            color = if (stats.isPreviousMonthReceived) palette.statusGreen.copy(alpha = 0.15f) else palette.otAmber.copy(alpha = 0.15f),
                             border = BorderStroke(
                                 1.dp,
-                                if (stats.isPreviousMonthReceived) StatusGreen.copy(alpha = 0.45f) else OtOrange.copy(alpha = 0.45f)
+                                if (stats.isPreviousMonthReceived) palette.statusGreen.copy(alpha = 0.45f) else palette.otAmber.copy(alpha = 0.45f)
                             ),
                             modifier = Modifier
                                 .weight(1f)
@@ -290,7 +290,7 @@ fun ReportsScreen(
                                 },
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = if (stats.isPreviousMonthReceived) StatusGreen else OtOrange,
+                                color = if (stats.isPreviousMonthReceived) palette.statusGreen else palette.otAmber,
                                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 9.dp)
                             )
                         }
@@ -317,13 +317,21 @@ fun ReportsScreen(
 
                 Spacer(modifier = Modifier.height(10.dp))
 
-                val netCardBg = if (palette.isDark) {
-                    listOf(Color(0xFF064E3B), Color(0xFF065F46))
-                } else {
-                    listOf(Color(0xFFECFDF5), StatusGreenBg)
+                val netCardBg = when {
+                    palette.isOled -> listOf(Color(0x2610B981), Color(0x1A10B981))
+                    palette.isDark -> listOf(Color(0xFF064E3B), Color(0xFF065F46))
+                    else -> listOf(Color(0xFFECFDF5), StatusGreenBg)
                 }
-                val netLabelColor = if (palette.isDark) Color(0xFFA7F3D0) else Color(0xFF065F46)
-                val netValueColor = if (palette.isDark) Color(0xFF34D399) else StatusGreen
+                val netLabelColor = when {
+                    palette.isOled -> Color(0xFFFFFFFF)
+                    palette.isDark -> Color(0xFFA7F3D0)
+                    else -> Color(0xFF065F46)
+                }
+                val netValueColor = when {
+                    palette.isOled -> palette.statusGreen
+                    palette.isDark -> Color(0xFF34D399)
+                    else -> StatusGreen
+                }
 
                 Row(
                     modifier = Modifier
@@ -426,14 +434,14 @@ fun ReportsScreen(
                             Text(
                                 text = "एडवांस कटौती: -₹${DateUtils.formatInr(stats.totalAdvance)}",
                                 fontSize = 11.sp,
-                                color = AdvancePink,
+                                color = palette.expenseRed,
                                 fontWeight = FontWeight.Medium
                             )
                             Text(
                                 text = "कुल बिल: ₹${DateUtils.formatInr(slipNetAmount)}",
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.ExtraBold,
-                                color = StatusGreen
+                                color = palette.statusGreen
                             )
                         }
                         if (stats.carryForwardAdded > 0.0) {
@@ -441,7 +449,7 @@ fun ReportsScreen(
                                 text = "💼 पिछला बाकी (${stats.previousMonthTitle}) +₹${DateUtils.formatInr(stats.carryForwardAdded)} भी शामिल है",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.SemiBold,
-                                color = OtOrange
+                                color = palette.otAmber
                             )
                         }
                     }

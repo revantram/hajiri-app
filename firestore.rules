@@ -61,7 +61,7 @@ service cloud.firestore {
              data.workDays is int &&
              data.workDays >= 1 &&
              data.workDays <= 31 &&
-             (!('themeStyle' in data) || (data.themeStyle is string && data.themeStyle in ['liquid_light', 'ocean_glass', 'rose_gold', 'liquid_dark'])) &&
+             (!('themeStyle' in data) || (data.themeStyle is string && data.themeStyle in ['liquid_light', 'ocean_glass', 'rose_gold', 'liquid_dark', 'oled_black'])) &&
              (!('settledMonths' in data) || (data.settledMonths is list && data.settledMonths.size() <= 120)) &&
              (!('monthPayments' in data) || (data.monthPayments is map && data.monthPayments.size() <= 120)) &&
              (!('activeSiteId' in data) || (data.activeSiteId is string && data.activeSiteId.size() <= 64)) &&

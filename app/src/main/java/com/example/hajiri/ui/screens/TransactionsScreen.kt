@@ -214,8 +214,8 @@ fun TransactionsScreen(
         item {
             val net = overview.netBalance
             val (netColor, netBadgeBg, netStatusLabel) = when {
-                net > 0.01 -> Triple(StatusGreen, StatusGreenBg, "लेना बाकी")
-                net < -0.01 -> Triple(AdvancePink, StatusRedBg, "देना बाकी")
+                net > 0.01 -> Triple(palette.statusGreen, palette.statusGreenBg, "लेना बाकी")
+                net < -0.01 -> Triple(palette.expenseRed, palette.statusRedBg, "देना बाकी")
                 else -> Triple(palette.textSecondary, palette.segmentedTrackBg, "हिसाब बराबर ✓")
             }
 
@@ -270,8 +270,8 @@ fun TransactionsScreen(
                     ) {
                         Surface(
                             shape = RoundedCornerShape(14.dp),
-                            color = OtOrangeBg.copy(alpha = if (palette.isDark) 0.16f else 0.72f),
-                            border = BorderStroke(1.dp, OtOrange.copy(alpha = 0.28f)),
+                            color = if (palette.isOled) palette.otAmberBg else OtOrangeBg.copy(alpha = if (palette.isDark) 0.16f else 0.72f),
+                            border = BorderStroke(1.dp, palette.otAmber.copy(alpha = 0.28f)),
                             modifier = Modifier.weight(1f)
                         ) {
                             Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
@@ -287,15 +287,15 @@ fun TransactionsScreen(
                                     text = "₹${DateUtils.formatInr(overview.totalGiven)}",
                                     fontSize = 17.sp,
                                     fontWeight = FontWeight.ExtraBold,
-                                    color = OtOrange
+                                    color = palette.otAmber
                                 )
                             }
                         }
 
                         Surface(
                             shape = RoundedCornerShape(14.dp),
-                            color = StatusGreenBg.copy(alpha = if (palette.isDark) 0.16f else 0.72f),
-                            border = BorderStroke(1.dp, StatusGreen.copy(alpha = 0.28f)),
+                            color = if (palette.isOled) palette.statusGreenBg else StatusGreenBg.copy(alpha = if (palette.isDark) 0.16f else 0.72f),
+                            border = BorderStroke(1.dp, palette.statusGreen.copy(alpha = 0.28f)),
                             modifier = Modifier.weight(1f)
                         ) {
                             Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
@@ -311,7 +311,7 @@ fun TransactionsScreen(
                                     text = "₹${DateUtils.formatInr(overview.totalReceived)}",
                                     fontSize = 17.sp,
                                     fontWeight = FontWeight.ExtraBold,
-                                    color = StatusGreen
+                                    color = palette.statusGreen
                                 )
                             }
                         }
@@ -364,7 +364,7 @@ fun TransactionsScreen(
                             ) {
                                 TransactionType.entries.forEach { type ->
                                     val isSelected = selectedType == type
-                                    val activeColor = if (type == TransactionType.GIVEN) OtOrange else StatusGreen
+                                    val activeColor = if (type == TransactionType.GIVEN) palette.otAmber else palette.statusGreen
                                     val prefix = if (type == TransactionType.GIVEN) "↗️ " else "↙️ "
                                     Surface(
                                         shape = RoundedCornerShape(11.dp),
@@ -510,7 +510,7 @@ fun TransactionsScreen(
                                     .testTag("tx_note_input")
                             )
 
-                            val buttonPrimary = if (selectedType == TransactionType.GIVEN) OtOrange else StatusGreen
+                            val buttonPrimary = if (selectedType == TransactionType.GIVEN) palette.otAmber else palette.statusGreen
                             val buttonSecondary = if (selectedType == TransactionType.GIVEN) Color(0xFFC2410C) else Color(0xFF065F46)
 
                             LiquidGlassButton(
@@ -718,8 +718,8 @@ private fun PersonBalanceCard(
 ) {
     val palette = LocalHajiriPalette.current
     val (balanceColor, balanceBg, statusText) = when {
-        summary.netBalance > 0.01 -> Triple(StatusGreen, StatusGreenBg, "लेना बाकी")
-        summary.netBalance < -0.01 -> Triple(AdvancePink, StatusRedBg, "देना बाकी")
+        summary.netBalance > 0.01 -> Triple(palette.statusGreen, palette.statusGreenBg, "लेना बाकी")
+        summary.netBalance < -0.01 -> Triple(palette.expenseRed, palette.statusRedBg, "देना बाकी")
         else -> Triple(palette.textMuted, palette.segmentedTrackBg, "बराबर ✓")
     }
 
@@ -811,8 +811,8 @@ private fun TransactionEntryCard(
     val palette = LocalHajiriPalette.current
     val txType = TransactionType.fromId(transaction.type)
     val isGiven = txType == TransactionType.GIVEN
-    val accentColor = if (isGiven) OtOrange else StatusGreen
-    val pillBg = if (isGiven) OtOrangeBg else StatusGreenBg
+    val accentColor = if (isGiven) palette.otAmber else palette.statusGreen
+    val pillBg = if (isGiven) palette.otAmberBg else palette.statusGreenBg
     val parsedDate = DateUtils.parseDateKey(transaction.dateKey)
     val dateLabel = if (parsedDate != null) {
         "${parsedDate.dayOfMonth} ${DateUtils.HINDI_MONTHS[parsedDate.monthValue - 1]} ${parsedDate.year}"

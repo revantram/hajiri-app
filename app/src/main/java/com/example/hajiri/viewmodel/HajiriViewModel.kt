@@ -228,7 +228,7 @@ class HajiriViewModel(
     private val _updateRepoSlug = MutableStateFlow(AppUpdateChecker.DEFAULT_GITHUB_REPO)
     val updateRepoSlug: StateFlow<String> = _updateRepoSlug.asStateFlow()
 
-    private val _installedVersionName = MutableStateFlow("1.6")
+    private val _installedVersionName = MutableStateFlow("1.7")
     val installedVersionName: StateFlow<String> = _installedVersionName.asStateFlow()
 
     private val _updateCheckState = MutableStateFlow<UpdateCheckState>(UpdateCheckState.Idle)
