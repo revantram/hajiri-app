@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Surface
@@ -60,7 +61,6 @@ import com.example.hajiri.util.DateUtils
 import com.example.hajiri.util.UpdateCheckState
 import com.example.hajiri.viewmodel.HajiriTab
 import com.example.hajiri.viewmodel.HajiriViewModel
-import com.example.hajiri.viewmodel.SyncStatus
 import java.time.YearMonth
 
 @Composable
@@ -76,7 +76,6 @@ fun HomeScreen(
     val stats by viewModel.homeStats.collectAsState()
     val currentUser by viewModel.currentUser.collectAsState()
     val updateState by viewModel.updateCheckState.collectAsState()
-    val syncStatus by viewModel.syncStatus.collectAsState()
 
     val palette = LocalHajiriPalette.current
     val activeSite = viewModel.getActiveSite(settings)
@@ -97,7 +96,7 @@ fun HomeScreen(
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         item {
-            // Header: Apple Dynamic Island / Capsule Header style
+            // Clean Header (No subtitle, no cloud sync badge, no site dropdown)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -119,108 +118,40 @@ fun HomeScreen(
                         Text(text = "📋", fontSize = 20.sp)
                     }
                     Spacer(modifier = Modifier.width(10.dp))
-                    Column {
-                        Text(
-                            text = "हाजिरी",
-                            fontSize = 24.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = palette.textPrimary
-                        )
-                        Text(
-                            text = "Daily Attendance & Salary",
-                            fontSize = 11.sp,
-                            color = palette.textMuted,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-                }
-
-                val pillDotColor = when (syncStatus) {
-                    SyncStatus.OFFLINE_SAVED -> OtOrange
-                    SyncStatus.SYNCING_PENDING -> palette.accent
-                    SyncStatus.SYNCED -> StatusGreen
-                }
-                Surface(
-                    shape = RoundedCornerShape(50),
-                    color = palette.glassCardHigh,
-                    border = BorderStroke(1.dp, pillDotColor.copy(alpha = 0.35f)),
-                    modifier = Modifier
-                        .shadow(4.dp, RoundedCornerShape(50), spotColor = Color(0x1A000000))
-                        .clickable { viewModel.setTab(HajiriTab.SETTINGS) }
-                        .testTag("home_cloud_status_pill")
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(8.dp)
-                                .background(pillDotColor, CircleShape)
-                        )
-                        Text(
-                            text = currentUser?.name?.ifBlank { "क्लाउड सिंक" } ?: "क्लाउड सिंक",
-                            fontSize = 12.sp,
-                            color = palette.textPrimary,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-                }
-            }
-        }
-
-        // Offline-First & Live Sync Status Strip + Active Site Switcher Pill
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                val (syncBg, syncFg, syncIcon) = when (syncStatus) {
-                    SyncStatus.OFFLINE_SAVED -> Triple(OtOrangeBg, OtOrange, "📴")
-                    SyncStatus.SYNCING_PENDING -> Triple(palette.accent.copy(alpha = 0.12f), palette.accent, "🔄")
-                    SyncStatus.SYNCED -> Triple(StatusGreenBg, StatusGreen, "☁️")
-                }
-                Surface(
-                    shape = RoundedCornerShape(50),
-                    color = syncBg,
-                    border = BorderStroke(1.dp, syncFg.copy(alpha = 0.35f)),
-                    modifier = Modifier
-                        .weight(1f)
-                        .testTag("offline_sync_banner")
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(5.dp)
-                    ) {
-                        Text(text = syncIcon, fontSize = 11.sp)
-                        Text(
-                            text = syncStatus.badgeText,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = syncFg,
-                            maxLines = 1
-                        )
-                    }
-                }
-
-                Surface(
-                    shape = RoundedCornerShape(50),
-                    color = palette.glassCardHigh,
-                    border = BorderStroke(1.dp, palette.accent.copy(alpha = 0.38f)),
-                    modifier = Modifier
-                        .clickable { viewModel.showSitesDialog.value = true }
-                        .testTag("home_site_switcher_pill")
-                ) {
                     Text(
-                        text = "🏗️ ${activeSite.name.take(14)} ▼",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = palette.accent,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                        text = "हाजिरी",
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = palette.textPrimary
                     )
+                }
+
+                val displayName = currentUser?.name?.trim().orEmpty()
+                if (displayName.isNotBlank()) {
+                    Surface(
+                        shape = RoundedCornerShape(50),
+                        color = palette.glassCardHigh,
+                        border = BorderStroke(1.dp, palette.glassBorderMid),
+                        modifier = Modifier
+                            .shadow(4.dp, RoundedCornerShape(50), spotColor = Color(0x1A000000))
+                            .clickable { viewModel.setTab(HajiriTab.SETTINGS) }
+                            .testTag("home_profile_pill")
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(5.dp)
+                        ) {
+                            Text(text = "👤", fontSize = 12.sp)
+                            Text(
+                                text = displayName,
+                                fontSize = 12.sp,
+                                color = palette.textPrimary,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -274,16 +205,15 @@ fun HomeScreen(
             CalendarAttendanceCard(viewModel = viewModel)
         }
 
-        // 3. Stats Row (4 Liquid Frosted Pods)
+        // 3. Stats Row (3 Equal-Width Liquid Frosted Pods: हाजिरी, गैरहाजिरी, आधा दिन)
         item {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                StatCard("हाजिर", stats.presentDays.toString(), StatusGreen, StatusGreenBg, Modifier.weight(1f))
-                StatCard("गैरहाजिर", stats.absentDays.toString(), StatusRed, StatusRedBg, Modifier.weight(1f))
+                StatCard("हाजिरी", stats.presentDays.toString(), StatusGreen, StatusGreenBg, Modifier.weight(1f))
+                StatCard("गैरहाजिरी", stats.absentDays.toString(), StatusRed, StatusRedBg, Modifier.weight(1f))
                 StatCard("आधा दिन", stats.halfDays.toString(), StatusYellow, StatusYellowBg, Modifier.weight(1f))
-                StatCard("छुट्टी", stats.leaveDays.toString(), StatusBlue, StatusBlueBg, Modifier.weight(1f))
             }
         }
 
@@ -305,38 +235,94 @@ fun HomeScreen(
                         )
                     }
 
-                    Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
 
-                    Text(
-                        text = "₹${DateUtils.formatInr(stats.baseEarnings)}",
-                        fontSize = 34.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = StatusGreen
-                    )
-
-                    Spacer(modifier = Modifier.height(14.dp))
-
+                    // Top Hero Row: Total Earnings (Left) vs Net Take-Home / हाथ में आएगा (Right)
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.Top
                     ) {
                         Column(horizontalAlignment = Alignment.Start) {
-                            Text(text = "₹${DateUtils.formatInr(stats.perDayRate)}", fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, color = palette.textPrimary)
-                            Text(text = "प्रति दिन", fontSize = 11.sp, color = palette.textSecondary, fontWeight = FontWeight.SemiBold)
+                            Text(
+                                text = "कुल कमाई",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = palette.textSecondary
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "₹${DateUtils.formatInr(stats.baseEarnings + stats.otEarnings)}",
+                                fontSize = 30.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = StatusGreen
+                            )
                         }
-                        if (stats.otEarnings > 0.0) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(text = "₹${DateUtils.formatInr(stats.otEarnings)}", fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, color = OtOrange)
-                                Text(text = "ओवरटाइम", fontSize = 11.sp, color = palette.textSecondary, fontWeight = FontWeight.SemiBold)
-                            }
-                        }
+
                         Column(horizontalAlignment = Alignment.End) {
-                            Text(text = "-₹${DateUtils.formatInr(stats.totalAdvance)}", fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, color = AdvancePink)
-                            Text(text = "एडवांस कटेगा", fontSize = 11.sp, color = palette.textSecondary, fontWeight = FontWeight.SemiBold)
+                            Text(
+                                text = "हाथ में आएगा",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = palette.textSecondary
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "₹${DateUtils.formatInr(stats.netTakeHome)}",
+                                fontSize = 30.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = palette.accent
+                            )
                         }
                     }
 
                     Spacer(modifier = Modifier.height(14.dp))
+                    HorizontalDivider(color = palette.divider)
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Advance Deduction & Optional Carry Forward near the middle divider
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "एडवांस कटेगा",
+                            fontSize = 13.sp,
+                            color = palette.textSecondary,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            text = "-₹${DateUtils.formatInr(stats.totalAdvance)}",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = AdvancePink
+                        )
+                    }
+
+                    if (stats.carryForwardAdded > 0.0) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "💼 पिछला बाकी (${stats.previousMonthTitle})",
+                                fontSize = 12.sp,
+                                color = palette.textMuted,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Text(
+                                text = "+₹${DateUtils.formatInr(stats.carryForwardAdded)}",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = OtOrange
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
 
                     val daysInCurrentMonth = remember(todayMonthKey) {
                         runCatching { YearMonth.parse(todayMonthKey).lengthOfMonth() }
@@ -364,50 +350,6 @@ fun HomeScreen(
                         color = StatusGreenBright,
                         trackColor = palette.progressTrackBg
                     )
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    if (stats.carryForwardAdded > 0.0) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(bottom = 4.dp),
-                            horizontalArrangement = Arrangement.End,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "💼 पिछला बाकी (${stats.previousMonthTitle}): ",
-                                fontSize = 11.sp,
-                                color = palette.textMuted,
-                                fontWeight = FontWeight.Medium
-                            )
-                            Text(
-                                text = "+₹${DateUtils.formatInr(stats.carryForwardAdded)}",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = OtOrange
-                            )
-                        }
-                    }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "हाथ में आएगा: ",
-                            fontSize = 12.sp,
-                            color = palette.textSecondary,
-                            fontWeight = FontWeight.Medium
-                        )
-                        Text(
-                            text = "₹${DateUtils.formatInr(stats.netTakeHome)}",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = StatusGreen
-                        )
-                    }
                 }
             }
         }

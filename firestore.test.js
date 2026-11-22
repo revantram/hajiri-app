@@ -493,3 +493,161 @@ test("Expenses: owner CRUD succeeds; rejects invalid amount/category/dateKey, cr
   // Owner can delete
   await assertSucceeds(expRef.delete());
 });
+
+test("Transactions: owner CRUD succeeds; rejects invalid type/name/amount/dateKey, createdAt mutation, shadow fields & cross-user", async () => {
+  const aliceDb = testEnv.authenticatedContext(ALICE_UID).firestore();
+  const bobDb = testEnv.authenticatedContext(BOB_UID).firestore();
+  const unauthDb = testEnv.unauthenticatedContext().firestore();
+  const created = validTimestamp();
+
+  const txRef = aliceDb
+    .collection("users")
+    .doc(ALICE_UID)
+    .collection("transactions")
+    .doc("tx_1");
+
+  await assertSucceeds(
+    txRef.set({
+      personName: "रमेश कुमार",
+      amount: 1500,
+      type: "given",
+      dateKey: "2026-11-21",
+      note: "उधार दिया",
+      createdAt: created,
+      updatedAt: created,
+    })
+  );
+
+  // Owner can get & list
+  await assertSucceeds(txRef.get());
+  await assertSucceeds(
+    aliceDb.collection("users").doc(ALICE_UID).collection("transactions").get()
+  );
+
+  // Owner can update allowed fields keeping createdAt intact
+  await assertSucceeds(
+    txRef.update({
+      personName: "रमेश भाई",
+      amount: 2000,
+      type: "received",
+      dateKey: "2026-11-21",
+      note: "वापस मिल गए",
+      updatedAt: validTimestamp(),
+    })
+  );
+
+  // Rejects mutating createdAt on update
+  await assertFails(
+    txRef.update({
+      createdAt: validTimestamp(),
+      updatedAt: validTimestamp(),
+    })
+  );
+
+  // Rejects unknown shadow field
+  await assertFails(
+    txRef.update({
+      isAdmin: true,
+      updatedAt: validTimestamp(),
+    })
+  );
+
+  // Rejects blank personName
+  await assertFails(
+    aliceDb
+      .collection("users")
+      .doc(ALICE_UID)
+      .collection("transactions")
+      .doc("tx_bad_name")
+      .set({
+        personName: "",
+        amount: 500,
+        type: "given",
+        dateKey: "2026-11-21",
+        note: "",
+        createdAt: validTimestamp(),
+        updatedAt: validTimestamp(),
+      })
+  );
+
+  // Rejects invalid type
+  await assertFails(
+    aliceDb
+      .collection("users")
+      .doc(ALICE_UID)
+      .collection("transactions")
+      .doc("tx_bad_type")
+      .set({
+        personName: "सुनील",
+        amount: 500,
+        type: "loan",
+        dateKey: "2026-11-21",
+        note: "",
+        createdAt: validTimestamp(),
+        updatedAt: validTimestamp(),
+      })
+  );
+
+  // Rejects <= 0 amount
+  await assertFails(
+    aliceDb
+      .collection("users")
+      .doc(ALICE_UID)
+      .collection("transactions")
+      .doc("tx_bad_amt")
+      .set({
+        personName: "सुनील",
+        amount: 0,
+        type: "given",
+        dateKey: "2026-11-21",
+        note: "",
+        createdAt: validTimestamp(),
+        updatedAt: validTimestamp(),
+      })
+  );
+
+  // Rejects invalid dateKey
+  await assertFails(
+    aliceDb
+      .collection("users")
+      .doc(ALICE_UID)
+      .collection("transactions")
+      .doc("tx_bad_date")
+      .set({
+        personName: "सुनील",
+        amount: 500,
+        type: "given",
+        dateKey: "21-11-2026",
+        note: "",
+        createdAt: validTimestamp(),
+        updatedAt: validTimestamp(),
+      })
+  );
+
+  // Rejects cross-user and unauthenticated access
+  await assertFails(
+    bobDb
+      .collection("users")
+      .doc(ALICE_UID)
+      .collection("transactions")
+      .doc("tx_1")
+      .get()
+  );
+  await assertFails(
+    bobDb.collection("users").doc(ALICE_UID).collection("transactions").get()
+  );
+  await assertFails(
+    bobDb
+      .collection("users")
+      .doc(ALICE_UID)
+      .collection("transactions")
+      .doc("tx_1")
+      .delete()
+  );
+  await assertFails(
+    unauthDb.collection("users").doc(ALICE_UID).collection("transactions").get()
+  );
+
+  // Owner can delete
+  await assertSucceeds(txRef.delete());
+});

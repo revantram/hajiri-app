@@ -1,5 +1,6 @@
 package com.example.hajiri.model
 
+import androidx.annotation.Keep
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.DocumentId
 import com.google.firebase.firestore.IgnoreExtraProperties
@@ -188,5 +189,51 @@ data class ExpenseMonthSummary(
     val netSavings: Double = 0.0,
     val entries: List<ExpenseRecord> = emptyList(),
     val categoryBreakdowns: List<CategoryExpenseBreakdown> = emptyList()
+)
+
+enum class TransactionType(
+    val id: String,
+    val labelHindi: String,
+    val shortLabelHindi: String
+) {
+    GIVEN("given", "दिए / उधार दिए", "दिए"),
+    RECEIVED("received", "लिए / जमा किए", "लिए");
+
+    companion object {
+        fun fromId(id: String?): TransactionType {
+            return entries.firstOrNull { it.id.equals(id, ignoreCase = true) } ?: GIVEN
+        }
+    }
+}
+
+@Keep
+@IgnoreExtraProperties
+data class TransactionRecord(
+    @DocumentId val id: String = "",
+    val personName: String = "",
+    val amount: Double = 0.0,
+    val type: String = TransactionType.GIVEN.id,
+    val dateKey: String = "",
+    val note: String = "",
+    @ServerTimestamp val createdAt: Timestamp? = null,
+    @ServerTimestamp val updatedAt: Timestamp? = null
+)
+
+data class PersonLedgerSummary(
+    val personKey: String,
+    val displayName: String,
+    val totalGiven: Double,
+    val totalReceived: Double,
+    val netBalance: Double,
+    val entryCount: Int,
+    val lastDateKey: String
+)
+
+data class TransactionsOverview(
+    val totalGiven: Double = 0.0,
+    val totalReceived: Double = 0.0,
+    val netBalance: Double = 0.0,
+    val entries: List<TransactionRecord> = emptyList(),
+    val personSummaries: List<PersonLedgerSummary> = emptyList()
 )
 

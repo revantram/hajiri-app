@@ -10,6 +10,8 @@ import com.example.hajiri.model.AttendanceStatus
 import com.example.hajiri.model.ExpenseCategory
 import com.example.hajiri.model.ExpenseRecord
 import com.example.hajiri.model.OvertimeRecord
+import com.example.hajiri.model.TransactionRecord
+import com.example.hajiri.model.TransactionType
 import com.example.hajiri.model.UserProfile
 import com.example.hajiri.model.UserSettings
 import com.example.hajiri.model.WageMode
@@ -167,6 +169,24 @@ class HajiriRepository(
             }
     }
 
+    fun observeTransactions(userId: String): Flow<List<TransactionRecord>> {
+        val colRef = userDoc(userId).collection("transactions")
+        return colRef.snapshots()
+            .map { snapshot ->
+                snapshot.toObjects(
+                    TransactionRecord::class.java,
+                    DocumentSnapshot.ServerTimestampBehavior.ESTIMATE
+                ).sortedWith(
+                    compareByDescending<TransactionRecord> { it.dateKey }
+                        .thenByDescending { it.createdAt ?: Timestamp(0, 0) }
+                )
+            }
+            .catch { error ->
+                logFlowFirestoreErrorIfSignedIn(error, userId, OperationType.LIST, colRef.path)
+                throw error
+            }
+    }
+
     fun observeSettings(userId: String): Flow<UserSettings> {
         val docRef = userDoc(userId).collection("settings").document(SETTINGS_DOC_ID)
         return docRef.snapshots()
@@ -219,8 +239,18 @@ class HajiriRepository(
                 logFlowFirestoreErrorIfSignedIn(error, userId, OperationType.LIST, "users/$userId/expenses")
                 emit(false)
             }
-        return combine(attFlow, settFlow, advFlow, otFlow, expFlow) { attPending, settPending, advPending, otPending, expPending ->
+        val txFlow = userDoc(userId).collection("transactions")
+            .snapshots(MetadataChanges.INCLUDE)
+            .map { it.metadata.hasPendingWrites() }
+            .catch { error ->
+                logFlowFirestoreErrorIfSignedIn(error, userId, OperationType.LIST, "users/$userId/transactions")
+                emit(false)
+            }
+        val basePendingFlow = combine(attFlow, settFlow, advFlow, otFlow, expFlow) { attPending, settPending, advPending, otPending, expPending ->
             attPending || settPending || advPending || otPending || expPending
+        }
+        return combine(basePendingFlow, txFlow) { basePending, txPending ->
+            basePending || txPending
         }
     }
 
@@ -616,6 +646,80 @@ class HajiriRepository(
         }
     }
 
+    suspend fun addTransaction(
+        personName: String,
+        amount: Double,
+        type: TransactionType,
+        dateKey: String,
+        note: String
+    ): String {
+        val uid = requireUserId()
+        val docRef = userDoc(uid).collection("transactions").document()
+        val cleanName = personName.trim().take(100)
+        require(cleanName.isNotEmpty()) { "Person name must not be blank" }
+        try {
+            val payload = mapOf<String, Any>(
+                "personName" to cleanName,
+                "amount" to amount.coerceIn(0.01, 10000000.0),
+                "type" to type.id,
+                "dateKey" to dateKey,
+                "note" to note.trim().take(250),
+                "createdAt" to FieldValue.serverTimestamp(),
+                "updatedAt" to FieldValue.serverTimestamp()
+            )
+            docRef.set(payload).await()
+            return docRef.id
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.CREATE, docRef.path)
+            throw e
+        }
+    }
+
+    suspend fun updateTransaction(
+        id: String,
+        personName: String,
+        amount: Double,
+        type: TransactionType,
+        dateKey: String,
+        note: String
+    ) {
+        val uid = requireUserId()
+        val docRef = userDoc(uid).collection("transactions").document(id)
+        val cleanName = personName.trim().take(100)
+        require(cleanName.isNotEmpty()) { "Person name must not be blank" }
+        try {
+            val updates = mapOf<String, Any>(
+                "personName" to cleanName,
+                "amount" to amount.coerceIn(0.01, 10000000.0),
+                "type" to type.id,
+                "dateKey" to dateKey,
+                "note" to note.trim().take(250),
+                "updatedAt" to FieldValue.serverTimestamp()
+            )
+            docRef.update(updates).await()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.UPDATE, docRef.path)
+            throw e
+        }
+    }
+
+    suspend fun deleteTransaction(id: String) {
+        val uid = requireUserId()
+        val docRef = userDoc(uid).collection("transactions").document(id)
+        try {
+            docRef.delete().await()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.DELETE, docRef.path)
+            throw e
+        }
+    }
+
     suspend fun saveSettings(
         salary: Double,
         dailyWage: Double,
@@ -891,7 +995,8 @@ class HajiriRepository(
             val otDocs = userRef.collection("overtime").get().await().documents
             val advDocs = userRef.collection("advances").get().await().documents
             val expDocs = userRef.collection("expenses").get().await().documents
-            deleteRefsInBatches((attDocs + otDocs + advDocs + expDocs).map { it.reference })
+            val txDocs = userRef.collection("transactions").get().await().documents
+            deleteRefsInBatches((attDocs + otDocs + advDocs + expDocs + txDocs).map { it.reference })
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {

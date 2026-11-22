@@ -236,6 +236,45 @@
         }
       },
       "required": ["amount", "category", "note", "dateKey", "createdAt", "updatedAt"]
+    },
+    "TransactionRecord": {
+      "title": "TransactionRecord",
+      "description": "Personal money given (lent) or received (collected) ledger entry per person",
+      "type": "object",
+      "properties": {
+        "personName": {
+          "type": "string",
+          "description": "Name of the person money was given to or received from"
+        },
+        "amount": {
+          "type": "number",
+          "description": "Transaction amount in INR"
+        },
+        "type": {
+          "type": "string",
+          "enum": ["given", "received"],
+          "description": "Direction of transaction: given (lent/paid) or received (collected)"
+        },
+        "dateKey": {
+          "type": "string",
+          "description": "Transaction date in YYYY-MM-DD format"
+        },
+        "note": {
+          "type": "string",
+          "description": "Optional note or details for the transaction"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Creation server timestamp (FieldValue.serverTimestamp())"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Last update server timestamp (FieldValue.serverTimestamp())"
+        }
+      },
+      "required": ["personName", "amount", "type", "dateKey", "note", "createdAt", "updatedAt"]
     }
   },
   "firestore": {
@@ -262,6 +301,10 @@
     "/users/{userId}/expenses/{expenseId}": {
       "schema": { "$ref": "#/entities/ExpenseRecord" },
       "description": "User personal/work expense entries synced across devices"
+    },
+    "/users/{userId}/transactions/{transactionId}": {
+      "schema": { "$ref": "#/entities/TransactionRecord" },
+      "description": "User money given/received ledger entries synced across devices"
     }
   }
 }

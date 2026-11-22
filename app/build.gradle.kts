@@ -15,8 +15,8 @@ android {
         applicationId = "com.aistudio.hajiri.rxvbkm"
         minSdk = 26
         targetSdk = 36
-        versionCode = 6
-        versionName = "1.5"
+        versionCode = 7
+        versionName = "1.6"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -89,6 +89,13 @@ tasks.withType<Test> {
     testLogging {
         events("passed", "failed", "skipped")
     }
+}
+
+configurations.configureEach {
+    // Prevent AGP lint/JVM classpaths from resolving unused Compose Desktop / Skiko / Swing
+    // transitive artifacts (e.g., kotlinx-coroutines-swing:1.10.2) that fail on GitHub Actions.
+    exclude(group = "org.jetbrains.kotlinx", module = "kotlinx-coroutines-swing")
+    exclude(group = "org.jetbrains.skiko")
 }
 
 dependencies {

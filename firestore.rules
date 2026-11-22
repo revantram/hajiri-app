@@ -125,6 +125,24 @@ service cloud.firestore {
              data.updatedAt <= request.time;
     }
 
+    function isValidTransactionRecord(data) {
+      return data.personName is string &&
+             data.personName.size() >= 1 &&
+             data.personName.size() <= 100 &&
+             (data.amount is int || data.amount is float) &&
+             data.amount > 0 &&
+             data.amount <= 10000000 &&
+             data.type is string &&
+             data.type in ['given', 'received'] &&
+             isValidDateKey(data.dateKey) &&
+             data.note is string &&
+             data.note.size() <= 250 &&
+             data.createdAt is timestamp &&
+             data.createdAt <= request.time &&
+             data.updatedAt is timestamp &&
+             data.updatedAt <= request.time;
+    }
+
     // User Profile Document
     match /users/{userId} {
       allow get: if isOwner(userId) && isValidId(userId);
@@ -258,6 +276,28 @@ service cloud.firestore {
                          incoming().diff(existing()).affectedKeys().hasOnly(['amount', 'category', 'note', 'dateKey', 'siteId', 'updatedAt']);
 
         allow delete: if isOwner(userId) && isValidId(expenseId);
+      }
+
+      // Personal Transactions (Given / Received) Subcollection
+      match /transactions/{transactionId} {
+        allow get: if isOwner(userId) && isValidId(transactionId);
+        allow list: if isOwner(userId);
+
+        allow create: if isSignedIn() &&
+                         isValidId(transactionId) &&
+                         isValidTransactionRecord(incoming()) &&
+                         request.auth.uid == userId &&
+                         incoming().keys().hasAll(['personName', 'amount', 'type', 'dateKey', 'note', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['personName', 'amount', 'type', 'dateKey', 'note', 'createdAt', 'updatedAt']);
+
+        allow update: if isSignedIn() &&
+                         isValidId(transactionId) &&
+                         isValidTransactionRecord(incoming()) &&
+                         request.auth.uid == userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['personName', 'amount', 'type', 'dateKey', 'note', 'updatedAt']);
+
+        allow delete: if isOwner(userId) && isValidId(transactionId);
       }
     }
   }

@@ -83,7 +83,6 @@ fun SettingsScreen(
     val currentUser by viewModel.currentUser.collectAsState()
     val autoUpdateEnabled by viewModel.autoUpdateCheckEnabled.collectAsState()
     val installedVersion by viewModel.installedVersionName.collectAsState()
-    val updateRepoSlug by viewModel.updateRepoSlug.collectAsState()
     val updateState by viewModel.updateCheckState.collectAsState()
     val updateDownloadState by viewModel.updateDownloadState.collectAsState()
     val reminderEnabled by viewModel.reminderEnabled.collectAsState()
@@ -253,7 +252,7 @@ fun SettingsScreen(
                 }
 
                 Text(
-                    text = "आपकी सभी हाजिरी Firebase क्लाउड में सुरक्षित हैं। नया फोन लेने पर भी इसी Google अकाउंट से डेटा वापस मिलेगा।",
+                    text = "आपकी सभी हाजिरी, खर्च और लेनदेन Firebase क्लाउड में सुरक्षित हैं। नया फोन लेने पर भी इसी Google अकाउंट से डेटा वापस मिलेगा।",
                     fontSize = 11.sp,
                     color = palette.textMuted
                 )
@@ -650,7 +649,7 @@ fun SettingsScreen(
                             color = palette.textPrimary
                         )
                         Text(
-                            text = "वर्ज़न: v$installedVersion • GitHub: $updateRepoSlug (बदलें)",
+                            text = "वर्ज़न: v$installedVersion",
                             fontSize = 11.sp,
                             color = palette.accent,
                             fontWeight = FontWeight.Medium
@@ -804,7 +803,7 @@ fun SettingsScreen(
                                         .testTag("settings_one_click_update_btn")
                                 ) {
                                     Text(
-                                        text = "⬇️ नया अपडेट (${st.releaseInfo.latestTag}) — यहीं डाउनलोड करें",
+                                        text = "अपडेट करें (${st.releaseInfo.latestTag})",
                                         color = Color.White,
                                         fontSize = 13.sp,
                                         fontWeight = FontWeight.ExtraBold
@@ -824,7 +823,7 @@ fun SettingsScreen(
                                         .testTag("check_update_btn")
                                 ) {
                                     Text(
-                                        text = if (st is UpdateCheckState.Checking) "⏳ अपडेट चेक हो रहा है..." else "🔄 1-Click अपडेट चेक करें",
+                                        text = if (st is UpdateCheckState.Checking) "⏳ अपडेट चेक हो रहा है..." else "अपडेट करें",
                                         color = Color.White,
                                         fontSize = 13.sp,
                                         fontWeight = FontWeight.ExtraBold

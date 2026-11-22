@@ -14,6 +14,10 @@ import com.example.hajiri.model.ExpenseMonthSummary
 import com.example.hajiri.model.ExpenseRecord
 import com.example.hajiri.model.MonthlyStats
 import com.example.hajiri.model.OvertimeRecord
+import com.example.hajiri.model.PersonLedgerSummary
+import com.example.hajiri.model.TransactionRecord
+import com.example.hajiri.model.TransactionType
+import com.example.hajiri.model.TransactionsOverview
 import com.example.hajiri.model.UserProfile
 import com.example.hajiri.model.UserSettings
 import com.example.hajiri.model.WageMode
@@ -50,8 +54,9 @@ import kotlin.coroutines.cancellation.CancellationException
 
 enum class HajiriTab(val label: String, val iconText: String) {
     HOME("होम", "🏠"),
-    REPORTS("रिपोर्ट", "📊"),
     EXPENSE("खर्च", "💸"),
+    TRANSACTIONS("लेनदेन", "🤝"),
+    REPORTS("रिपोर्ट", "📊"),
     SETTINGS("सेटिंग्स", "⚙️")
 }
 
@@ -146,6 +151,15 @@ class HajiriViewModel(
             .guardStream(emptyList(), "expenses")
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), emptyList())
 
+    val transactions: StateFlow<List<TransactionRecord>> =
+        repository.observeTransactions(currentUserId)
+            .guardStream(emptyList(), "transactions")
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), emptyList())
+
+    val transactionsOverview: StateFlow<TransactionsOverview> = transactions
+        .map { entries -> buildTransactionsOverview(entries) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), TransactionsOverview())
+
     val settings: StateFlow<UserSettings> =
         repository.observeSettings(currentUserId)
             .guardStream(UserSettings(), "settings")
@@ -214,7 +228,7 @@ class HajiriViewModel(
     private val _updateRepoSlug = MutableStateFlow(AppUpdateChecker.DEFAULT_GITHUB_REPO)
     val updateRepoSlug: StateFlow<String> = _updateRepoSlug.asStateFlow()
 
-    private val _installedVersionName = MutableStateFlow("1.5")
+    private val _installedVersionName = MutableStateFlow("1.6")
     val installedVersionName: StateFlow<String> = _installedVersionName.asStateFlow()
 
     private val _updateCheckState = MutableStateFlow<UpdateCheckState>(UpdateCheckState.Idle)
@@ -625,6 +639,141 @@ class HajiriViewModel(
                 _toastEvent.emit("⚠️ खर्च हटाया नहीं जा सका")
             }
         }
+    }
+
+    fun addTransaction(
+        personName: String,
+        amount: Double,
+        type: TransactionType,
+        dateKey: String = todayKey,
+        note: String = ""
+    ) {
+        viewModelScope.launch {
+            val cleanName = personName.trim()
+            if (cleanName.isBlank()) {
+                _toastEvent.emit("⚠️ कृपया व्यक्ति का नाम लिखें")
+                return@launch
+            }
+            if (amount <= 0.0) {
+                _toastEvent.emit("⚠️ सही राशि डालें")
+                return@launch
+            }
+            val safeDateKey = dateKey.takeIf { DateUtils.parseDateKey(it) != null } ?: todayKey
+            try {
+                repository.addTransaction(
+                    personName = cleanName,
+                    amount = amount,
+                    type = type,
+                    dateKey = safeDateKey,
+                    note = note
+                )
+                val actionLabel = if (type == TransactionType.GIVEN) "दिए" else "लिए"
+                _toastEvent.emit("🤝 $cleanName — ₹${DateUtils.formatInr(amount)} ($actionLabel) सेव ✓")
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                _toastEvent.emit("⚠️ लेनदेन सेव नहीं हो सका")
+            }
+        }
+    }
+
+    fun updateTransaction(
+        id: String,
+        personName: String,
+        amount: Double,
+        type: TransactionType,
+        dateKey: String,
+        note: String
+    ) {
+        if (id.isBlank()) return
+        viewModelScope.launch {
+            val cleanName = personName.trim()
+            if (cleanName.isBlank()) {
+                _toastEvent.emit("⚠️ कृपया व्यक्ति का नाम लिखें")
+                return@launch
+            }
+            if (amount <= 0.0) {
+                _toastEvent.emit("⚠️ सही राशि डालें")
+                return@launch
+            }
+            val safeDateKey = dateKey.takeIf { DateUtils.parseDateKey(it) != null } ?: todayKey
+            try {
+                repository.updateTransaction(
+                    id = id,
+                    personName = cleanName,
+                    amount = amount,
+                    type = type,
+                    dateKey = safeDateKey,
+                    note = note
+                )
+                _toastEvent.emit("✏️ लेनदेन अपडेट हो गया ✓")
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                _toastEvent.emit("⚠️ लेनदेन अपडेट नहीं हो सका")
+            }
+        }
+    }
+
+    fun deleteTransaction(id: String) {
+        if (id.isBlank()) return
+        viewModelScope.launch {
+            try {
+                repository.deleteTransaction(id)
+                _toastEvent.emit("🗑️ लेनदेन हटाया गया")
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                _toastEvent.emit("⚠️ लेनदेन हटाया नहीं जा सका")
+            }
+        }
+    }
+
+    private fun buildTransactionsOverview(entries: List<TransactionRecord>): TransactionsOverview {
+        var totalGiven = 0.0
+        var totalReceived = 0.0
+        val grouped = linkedMapOf<String, MutableList<TransactionRecord>>()
+        entries.forEach { tx ->
+            val t = TransactionType.fromId(tx.type)
+            if (t == TransactionType.GIVEN) totalGiven += tx.amount else totalReceived += tx.amount
+            val key = tx.personName.trim().lowercase()
+            if (key.isNotEmpty()) {
+                grouped.getOrPut(key) { mutableListOf() }.add(tx)
+            }
+        }
+        val personSummaries = grouped.map { (key, list) ->
+            var given = 0.0
+            var received = 0.0
+            list.forEach { item ->
+                if (TransactionType.fromId(item.type) == TransactionType.GIVEN) {
+                    given += item.amount
+                } else {
+                    received += item.amount
+                }
+            }
+            val latest = list.first()
+            PersonLedgerSummary(
+                personKey = key,
+                displayName = latest.personName.trim(),
+                totalGiven = given,
+                totalReceived = received,
+                netBalance = given - received,
+                entryCount = list.size,
+                lastDateKey = latest.dateKey
+            )
+        }.sortedWith(
+            compareByDescending<PersonLedgerSummary> { kotlin.math.abs(it.netBalance) > 0.01 }
+                .thenByDescending { it.lastDateKey }
+                .thenBy { it.displayName.lowercase() }
+        )
+
+        return TransactionsOverview(
+            totalGiven = totalGiven,
+            totalReceived = totalReceived,
+            netBalance = totalGiven - totalReceived,
+            entries = entries,
+            personSummaries = personSummaries
+        )
     }
 
     fun addAdvance(amount: Double, reason: String, dateKey: String = todayKey) {

@@ -70,7 +70,6 @@ import com.example.hajiri.ui.theme.StatusRed
 import com.example.hajiri.util.DateUtils
 import com.example.hajiri.util.ExpenseReportPdfGenerator
 import com.example.hajiri.viewmodel.HajiriViewModel
-import com.example.hajiri.viewmodel.SyncStatus
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -94,7 +93,6 @@ fun ExpenseScreen(
     val todayKey by viewModel.todayKeyState.collectAsState()
     val earliestYear by viewModel.earliestDataYear.collectAsState()
     val summary by viewModel.expenseMonthSummary.collectAsState()
-    val syncStatus by viewModel.syncStatus.collectAsState()
 
     var showMonthPicker by remember { mutableStateOf(false) }
     var isAddExpanded by remember { mutableStateOf(true) }
@@ -253,35 +251,6 @@ fun ExpenseScreen(
                                 )
                             }
                         }
-                    }
-                }
-
-                // Live Sync Status Indicator
-                val (syncBg, syncFg, syncIcon) = when (syncStatus) {
-                    SyncStatus.OFFLINE_SAVED -> Triple(OtOrangeBg, OtOrange, "📴")
-                    SyncStatus.SYNCING_PENDING -> Triple(palette.accent.copy(alpha = 0.12f), palette.accent, "🔄")
-                    SyncStatus.SYNCED -> Triple(StatusGreenBg, StatusGreen, "☁️")
-                }
-                Surface(
-                    shape = RoundedCornerShape(50),
-                    color = syncBg,
-                    border = BorderStroke(1.dp, syncFg.copy(alpha = 0.35f)),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("expense_sync_status_badge")
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Text(text = syncIcon, fontSize = 11.sp)
-                        Text(
-                            text = syncStatus.badgeText,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = syncFg
-                        )
                     }
                 }
             }

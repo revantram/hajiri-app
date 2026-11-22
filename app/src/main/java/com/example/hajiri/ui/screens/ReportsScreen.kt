@@ -2,8 +2,6 @@ package com.example.hajiri.ui.screens
 
 import android.content.ActivityNotFoundException
 import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
 import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -664,59 +662,6 @@ fun ReportsScreen(
                             fontSize = 13.sp
                         )
                     }
-                }
-            }
-        }
-
-        // Text Export & Share
-        GlassCard {
-            Column {
-                Text(
-                    text = "टेक्स्ट रिपोर्ट (Quick Copy & Share)",
-                    fontSize = 14.sp,
-                    color = palette.textPrimary,
-                    fontWeight = FontWeight.ExtraBold,
-                    modifier = Modifier.padding(bottom = 12.dp)
-                )
-
-                LiquidGlassButton(
-                    onClick = {
-                        val reportText = viewModel.getReportText(selectedMonth)
-                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                        val clip = ClipData.newPlainText("Hajiri Report", reportText)
-                        clipboard.setPrimaryClip(clip)
-                        viewModel.showMessage("📋 रिपोर्ट कॉपी हो गई!")
-                    },
-                    containerColor = palette.accentSecondary,
-                    secondaryColor = palette.accent,
-                    shape = RoundedCornerShape(16.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("copy_report_btn")
-                ) {
-                    Text("📄 टेक्स्ट Report Copy करें", color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 14.sp)
-                }
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                LiquidGlassButton(
-                    onClick = {
-                        val reportText = viewModel.getReportText(selectedMonth)
-                        val sendIntent = Intent().apply {
-                            action = Intent.ACTION_SEND
-                            putExtra(Intent.EXTRA_TEXT, reportText)
-                            type = "text/plain"
-                        }
-                        context.startActivity(Intent.createChooser(sendIntent, "Share Hajiri Report"))
-                    },
-                    containerColor = Color(0xFF0F766E),
-                    secondaryColor = Color(0xFF115E59),
-                    shape = RoundedCornerShape(16.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("share_whatsapp_btn")
-                ) {
-                    Text("💬 WhatsApp टेक्स्ट Share करें", color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 14.sp)
                 }
             }
         }

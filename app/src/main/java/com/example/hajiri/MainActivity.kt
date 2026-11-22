@@ -79,6 +79,7 @@ import com.example.hajiri.ui.screens.HistoryScreen
 import com.example.hajiri.ui.screens.HomeScreen
 import com.example.hajiri.ui.screens.ReportsScreen
 import com.example.hajiri.ui.screens.SettingsScreen
+import com.example.hajiri.ui.screens.TransactionsScreen
 import com.example.hajiri.ui.theme.HajiriTheme
 import com.example.hajiri.ui.theme.LocalHajiriPalette
 import com.example.hajiri.util.DailyReminderScheduler
@@ -315,8 +316,9 @@ fun MainApp(
                 } else {
                     when (currentTab) {
                         HajiriTab.HOME -> HomeScreen(viewModel = viewModel)
-                        HajiriTab.REPORTS -> ReportsScreen(viewModel = viewModel)
                         HajiriTab.EXPENSE -> ExpenseScreen(viewModel = viewModel)
+                        HajiriTab.TRANSACTIONS -> TransactionsScreen(viewModel = viewModel)
+                        HajiriTab.REPORTS -> ReportsScreen(viewModel = viewModel)
                         HajiriTab.SETTINGS -> SettingsScreen(
                             viewModel = viewModel,
                             googleEmail = googleEmail,
@@ -523,14 +525,14 @@ fun FloatingLiquidDock(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 10.dp, vertical = 7.dp),
+                        .padding(horizontal = 6.dp, vertical = 6.dp),
                     horizontalArrangement = Arrangement.SpaceEvenly,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     HajiriTab.entries.forEach { tab ->
                         val isSelected = tab == selectedTab
                         Surface(
-                            shape = RoundedCornerShape(22.dp),
+                            shape = RoundedCornerShape(20.dp),
                             color = if (isSelected) palette.accent.copy(alpha = if (palette.isDark) 0.30f else 0.16f) else Color.Transparent,
                             border = if (isSelected) {
                                 BorderStroke(
@@ -550,15 +552,16 @@ fun FloatingLiquidDock(
                         ) {
                             Column(
                                 horizontalAlignment = Alignment.CenterHorizontally,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 7.dp)
+                                modifier = Modifier.padding(horizontal = 2.dp, vertical = 7.dp)
                             ) {
                                 Text(
                                     text = tab.iconText,
-                                    fontSize = 19.sp
+                                    fontSize = 18.sp
                                 )
                                 Text(
                                     text = tab.label,
-                                    fontSize = 11.sp,
+                                    fontSize = 10.sp,
+                                    maxLines = 1,
                                     fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Bold,
                                     color = if (isSelected) palette.accent else palette.textSecondary
                                 )
